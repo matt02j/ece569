@@ -11,12 +11,12 @@
 ##                      :
 ## COPYRIGHT            : amrao@email.arizona.edu, harshilpk@email.arizona.com, priyankag@email.arizona.edu
 ## ######################################################################################################################## */
-#include < stdlib.h > 
-#include < string.h > 
-#include < math.h > 
-#include < stdio.h > 
-#include < unistd.h > 
-#include < cuda.h >
+#include <stdlib.h> 
+#include <string.h> 
+#include <math.h> 
+#include <stdio.h> 
+#include <unistd.h> 
+#include <cuda.h>
 
 #define arrondi(x)((ceil(x) - x) < (x - floor(x)) ? (int) ceil(x) : (int) floor(x))
 #define min(x, y)((x) < (y) ? (x) : (y))
