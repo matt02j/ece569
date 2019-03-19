@@ -22,7 +22,8 @@
 #define min(x, y)((x) < (y) ? (x) : (y))
 #define signf(x)((x) >= 0 ? 0 : 1)
 #define max(x, y)((x) < (y) ? (y) : (x))
-#define SQR(A)((A) * (A))# define BPSK(x)(1 - 2 * (x))
+#define SQR(A)((A) * (A))
+#define BPSK(x)(1 - 2 * (x))
 #define PI 3.1415926536
 
 __constant__ int Mat_device[5184];
