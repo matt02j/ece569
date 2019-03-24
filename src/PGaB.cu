@@ -229,7 +229,7 @@ int main(int argc, char * argv[]) {
   Graine = 1; // Seed Initialization for Multiple Simulations
 
   // brkunl
-  alpha_max = 0.06; //Channel Crossover Probability Max and Min
+  alpha_max = 0.03; //Channel Crossover Probability Max and Min
   alpha_min = 0.03;
   alpha_step = 0.01;
 
@@ -381,10 +381,10 @@ int main(int argc, char * argv[]) {
   strcpy(FileName, FileResult);
   f = fopen(FileName, "w");
   fprintf(f, "-------------------------Gallager B--------------------------------------------------\n");
-  fprintf(f, "alpha\t\tNbEr(BER)\t\tNbFer(FER)\t\tNbtested\t\tIterAver(Itermax)\t\tNbUndec(Dmin)\n");
+  fprintf(f, "alpha\t\tNbEr(BER)\t\tNbFer(FER)\t\tNbtested\t\tIterAver(Itermax)\tNbUndec(Dmin)\n");
 
   printf("-------------------------Gallager B--------------------------------------------------\n");
-  printf("alpha\t\tNbEr(BER)\t\tNbFer(FER)\t\tNbtested\t\tIterAver(Itermax)\t\tNbUndec(Dmin)\n");
+  printf("alpha\t\t\tNbEr(BER)\t\tNbFer(FER)\t\tNbtested\t\tIterAver(Itermax)\t\tNbUndec(Dmin)\n");
 
   for (alpha = alpha_max; alpha >= alpha_min; alpha -= alpha_step) {
 
@@ -414,7 +414,7 @@ int main(int argc, char * argv[]) {
       // All zero codeword
       //for (n=0;n<N;n++) { Codeword[n]=0; }
 
-      // Add Noise
+      // Add Noise 
       for (n = 0; n < N; n++)
         if (drand48() < alpha) Receivedword_host[n] = 1 - Codeword[n];
         else Receivedword_host[n] = Codeword[n];
@@ -499,8 +499,8 @@ int main(int argc, char * argv[]) {
       if (NbTotalErrors == NBframes) break;
     }
     printf("%1.5f\t\t", alpha);
-    printf("%10d (%1.16f)\t\t", NbBitError, (float) NbBitError / N / nbtestedframes);
-    printf("%4d (%1.16f)\t\t", NbTotalErrors, (float) NbTotalErrors / nbtestedframes);
+    printf("%10d (%1.6f)\t\t", NbBitError, (float) NbBitError / N / nbtestedframes);
+    printf("%4d (%1.6f)\t\t", NbTotalErrors, (float) NbTotalErrors / nbtestedframes);
     printf("%10d\t\t", nbtestedframes);
     printf("%1.2f(%d)\t\t", (float) NiterMoy / nbtestedframes, NiterMax);
     printf("%d(%d)\n", NbUnDetectedErrors, Dmin);
