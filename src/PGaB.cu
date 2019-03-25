@@ -13,13 +13,15 @@
 // Description:      : Probabalistic Gallager B
 //                   :
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+
 #include <stdlib.h> 
+#include <stdio.h> 
 #include <string.h> 
 #include <math.h> 
-#include <stdio.h> 
 #include <unistd.h> 
 #include <cuda.h>
 #include <iostream>
+#include <omp.h>
 
 #define arrondi(x)((ceil(x) - x) < (x - floor(x)) ? (int) ceil(x) : (int) floor(x))
 #define min(x, y)((x) < (y) ? (x) : (y))
@@ -52,7 +54,12 @@ __constant__ int Mat_device[5184];
 // TODO Main is reading args in the most horendous way ive
 // ever seen, us fstreams, arg parser, ect anything to make
 // that not what it is
+// also uses 4 different input files, 3 of which are only dimensions
 //
+// TODO replace calloc with mallocs where possible
+//
+// TODO make sure all allocated memory gets freed at the apropriate time
+
 
 // Message from channel copied into variable node to check node array.
 __global__ void DataPassGB_0(int * VtoC, int * Receivedword, int * Interleaver, int N, int NbBranch) {
@@ -236,12 +243,21 @@ __global__ void APP_GB(int* Decide, int* CtoV, int* Receivedword, int* Interleav
       // 
       for (unsigned stride = 0; stride < strides; stride++) {
 
-         node_idx = Interleaver[id * strides + stride];
-         Global += (-2) * CtoV[node_idx] + 1;
+         node_idx = Interleaver[id * strides + stride]; //this is not coalesced at all
+         Global += (-2) * CtoV[node_idx] + 1; 
       }
       
       // 
-      Decide[id] = (Global < 0)? 1 : ((Global > 0)? 0 : i);
+      //Decide[id] = (Global < 0)? 1 : ((Global > 0)? 0 : i);
+      if(Global < 0){
+	 Decide[id]=1;
+      }
+      else if (Global > 0){
+	 Decide[id]=0;
+      }
+      else{
+	 Decide[id] = i;
+      }
    }
 }
 
@@ -251,21 +267,24 @@ __global__ void ComputeSyndrome(int * Synd, int * Decide, int M, int NbBranch) {
    // calculate the current index on the grid
    unsigned id = threadIdx.x + blockIdx.x * blockDim.x;
 
-   // intialize ___ regardless of bounds...
-   Synd[id] = 0;
-
+   
+   
    if (id < M) {
-
+      //Synd[id] = 0;
+      int synd=0;
       unsigned strides = (NbBranch / M);
 
       // 
       for (unsigned stride = 0; stride < strides; stride++) {
 
          __syncthreads();
-
-         Synd[id] = Synd[id] ^ Decide[Mat_device[id * strides + stride]];
+	 //much faster this way, still room for more optimizations though
+         //Synd[id] = Synd[id] ^ Decide[Mat_device[id * strides + stride]];
+	 synd ^=Decide[Mat_device[id * strides + stride]];
       }
+      Synd[id]=synd;
    }
+  
 }
 
 // 
@@ -310,7 +329,7 @@ unsigned GaussianElimination_MRB(int* Perm, int** MatOut, int** Mat, int M, int 
       // If a "1" is found on the column, permutation of rows
       if (ind < M) {
 
-         // 
+         // swap row "m" with row "ind" from "indColumn" to the end of the row
          for (unsigned n = indColumn; n < N; n++) {
             buf = Mat[m][n];
             Mat[m][n] = Mat[ind][n];
@@ -323,7 +342,7 @@ unsigned GaussianElimination_MRB(int* Perm, int** MatOut, int** Mat, int M, int 
             // 
             if (Mat[m1][indColumn] == 1) {
 
-               // 
+               // XOR row "m1" with row "m" from "indColumn" to the end of the row
                for (unsigned n = indColumn; n < N; n++) {
                   Mat[m1][n] = Mat[m1][n] ^ Mat[m][n];
                }
@@ -378,6 +397,9 @@ unsigned GaussianElimination_MRB(int* Perm, int** MatOut, int** Mat, int M, int 
 //#####################################################################################################
 
 int main(int argc, char * argv[]) {
+   if(argc < 3 ){
+      fprintf(stderr,"Usage: PGaB /Path/To/Data/File Path/to/output/file");
+   }
 
    // 
    FILE * f;
@@ -413,7 +435,7 @@ int main(int argc, char * argv[]) {
    NBframes = 100; // Simulation stops when NBframes in error
    Graine = 1; // Seed Initialization for Multiple Simulations
 
-   // brkunl
+   // shortend for testing purposes, was alpha_max=0.06
    alpha_max = 0.03; //Channel Crossover Probability Max and Min
    alpha_min = 0.03;
    alpha_step = 0.01;
@@ -462,7 +484,7 @@ int main(int argc, char * argv[]) {
          ColumnDegree[Mat_host[m][k]]++;
       }
    }
-
+   //TODO free filename and filematrix
    printf("Matrix Loaded \n");
 
    // ----------------------------------------------------
@@ -617,24 +639,25 @@ int main(int argc, char * argv[]) {
       // encoding
       for (nb = 0, nbtestedframes = 0; nb < NbMonteCarlo; nb++) {
          
-         //
-         for (k = 0; k < rank; k++) {
+         // replaced for loop with memset, its faster
+         /*for (k = 0; k < rank; k++) {
             U[k] = 0;
-         }
+         }*/
+	 memset(U,0,rank*sizeof(int));
          
-         // 
+         // randomly gerenates a uniform distribution of 0s and 1s
          for (k = rank; k < N; k++) {
             U[k] = floor(drand48() * 2);
          }
-
-         // 
+     
+         // TODO this is what takes ~60% of the whole program
          for (k = rank - 1; k >= 0; k--) {
             for (l = k + 1; l < N; l++) {
                U[k] = U[k] ^ (MatG[k][l] * U[l]);
             }
          }
 
-         // 
+         //
          for (k = 0; k < N; k++) {
             Codeword[PermG[k]] = U[k];
          }
@@ -656,13 +679,17 @@ int main(int argc, char * argv[]) {
          // Decoder
          //============================================================================
          
-         for (k = 0; k < NbBranch; k++) {
+	 //replaced with memset
+         /*for (k = 0; k < NbBranch; k++) {
             CtoV_host[k] = 0;
-         }
+         }*/
+	 memset(CtoV_host,0,NbBranch*sizeof(int));
 
-         for (k = 0; k < N; k++) {
+	 //replaced with memmove
+         /*for (k = 0; k < N; k++) {
             Decide_host[k] = Receivedword_host[k];
-         }
+         }*/
+	 memmove(Decide_host,Receivedword_host,N*sizeof(int));
 
          cudaMemcpy(Receivedword_device, Receivedword_host, N * sizeof(int), cudaMemcpyHostToDevice);
          cudaMemcpy(Decide_device, Decide_host, N * sizeof(int), cudaMemcpyHostToDevice);
@@ -705,7 +732,7 @@ int main(int argc, char * argv[]) {
                Synd_host1 = 1;
             }
 
-            // 
+            // if (IsCodeword) algorithm has converged and we are done, exit the loop
             IsCodeword = Synd_host1;
             if (IsCodeword) {
                break;
