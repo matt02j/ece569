@@ -21,6 +21,7 @@
 #include <unistd.h> 
 #include <cuda.h>
 #include <iostream>
+#include <sys/time.h>
 #include <omp.h>
 
 #define arrondi(x)((ceil(x) - x) < (x - floor(x)) ? (int) ceil(x) : (int) floor(x))
@@ -30,6 +31,8 @@
 #define SQR(A)((A) * (A))
 #define BPSK(x)(1 - 2 * (x))
 #define PI 3.1415926536
+
+#define PROFILE
 
 __constant__ int Mat_device[5184];
 
@@ -396,10 +399,25 @@ unsigned GaussianElimination_MRB(int* Perm, int** MatOut, int** Mat, int M, int 
 
 //#####################################################################################################
 
+unsigned long diff_time_usec(struct timeval start, struct timeval stop){
+  unsigned long diffTime;
+  if(stop.tv_usec < start.tv_usec){
+	diffTime = 1000000 + stop.tv_usec-start.tv_usec;
+        diffTime += 1000000 * (stop.tv_sec - 1 - start.tv_sec);
+  }
+  else{
+	diffTime = stop.tv_usec - start.tv_usec;
+        diffTime += 1000000 * (stop.tv_sec - start.tv_sec);
+  }
+  return diffTime;
+}
+
 int main(int argc, char * argv[]) {
    if(argc < 3 ){
       fprintf(stderr,"Usage: PGaB /Path/To/Data/File Path/to/output/file");
    }
+  struct timeval start,stop;
+  unsigned long diffTime=0;
 
    // 
    FILE * f;
@@ -551,6 +569,9 @@ int main(int argc, char * argv[]) {
       varr = 0;
    }
 
+#ifdef PROFILE 
+  gettimeofday(&start,NULL);
+#endif 
    //Allocating memory for variables on device as well as the host
    cudaMalloc((void ** ) & Synd_device, M * sizeof(int));
    CtoV_host = (int * ) calloc(NbBranch, sizeof(int));
@@ -565,6 +586,12 @@ int main(int argc, char * argv[]) {
    cudaMalloc((void ** ) & Interleaver_device, NbBranch * sizeof(int));
    U = (int * ) calloc(N, sizeof(int));
    srand48(time(0) + Graine * 31 + 113);
+
+#ifdef PROFILE  
+  gettimeofday(&stop,NULL);  
+  diffTime = diff_time_usec(start,stop);  
+  fprintf(stderr,"time for cuda mallocs and callocs(line ~576) in MicroSec: %lu \n",diffTime);
+#endif 
 
    //Initializing grid and block dimensions
 
@@ -581,6 +608,7 @@ int main(int argc, char * argv[]) {
 
    MatG = (int ** ) calloc(M, sizeof(int * ));
    
+
    for (m = 0; m < M; m++) {
       MatG[m] = (int * ) calloc(N, sizeof(int));
    }
@@ -637,6 +665,9 @@ int main(int argc, char * argv[]) {
       cudaMemcpy(VtoC_device, VtoC_host, NbBranch * sizeof(int), cudaMemcpyHostToDevice);
 
       // encoding
+#ifdef PROFILE 
+  gettimeofday(&start,NULL);
+#endif 
       for (nb = 0, nbtestedframes = 0; nb < NbMonteCarlo; nb++) {
          
          // replaced for loop with memset, its faster
@@ -646,6 +677,7 @@ int main(int argc, char * argv[]) {
 	 memset(U,0,rank*sizeof(int));
          
          // randomly gerenates a uniform distribution of 0s and 1s
+	 #pragma omp parallel for
          for (k = rank; k < N; k++) {
             U[k] = floor(drand48() * 2);
          }
@@ -658,6 +690,7 @@ int main(int argc, char * argv[]) {
          }
 
          //
+	 #pragma omp parallel for
          for (k = 0; k < N; k++) {
             Codeword[PermG[k]] = U[k];
          }
@@ -666,6 +699,7 @@ int main(int argc, char * argv[]) {
          //for (n=0;n<N;n++) { Codeword[n]=0; }
 
          // Add Noise 
+	 #pragma omp parallel for
          for (n = 0; n < N; n++){
             if (drand48() < alpha){
                Receivedword_host[n] = 1 - Codeword[n];
@@ -748,9 +782,10 @@ int main(int argc, char * argv[]) {
          NbError = 0;
 
          //
+	 #pragma omp parallel for
          for (k = 0; k < N; k++) {
             if (Decide_host[k] != Codeword[k]) {
-               NbError++;
+               ++NbError;
             }
          }
 
@@ -784,6 +819,11 @@ int main(int argc, char * argv[]) {
          }
       }
 
+#ifdef PROFILE  
+  gettimeofday(&stop,NULL);  
+  diffTime = diff_time_usec(start,stop);  
+  fprintf(stderr,"time for loops in MicroSec: %lu \n",diffTime);
+#endif 
       printf("%1.5f\t\t", alpha);
       printf("%10d (%1.6f)\t\t", NbBitError, (float) NbBitError / N / nbtestedframes);
       printf("%4d (%1.6f)\t\t", NbTotalErrors, (float) NbTotalErrors / nbtestedframes);
