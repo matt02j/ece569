@@ -14,12 +14,15 @@
 //                   :
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 #include <stdlib.h> 
+#include <stdio.h> 
 #include <string.h> 
 #include <math.h> 
-#include <stdio.h> 
+
 #include <unistd.h> 
 #include <cuda.h>
 #include <iostream>
+#include <sys/time.h>
+// #include <omp.h>
 
 #define arrondi(x)((ceil(x) - x) < (x - floor(x)) ? (int) ceil(x) : (int) floor(x))
 #define min(x, y)((x) < (y) ? (x) : (y))
@@ -28,6 +31,8 @@
 #define SQR(A)((A) * (A))
 #define BPSK(x)(1 - 2 * (x))
 #define PI 3.1415926536
+   
+#define PROFILE
 
 __constant__ int Mat_device[5184];
 
@@ -53,6 +58,10 @@ __constant__ int Mat_device[5184];
 // ever seen, us fstreams, arg parser, ect anything to make
 // that not what it is
 //
+// also uses 4 different input files, 3 of which are only dimensions
+// TODO replace calloc with mallocs where possible
+//
+// TODO make sure all allocated memory gets freed at the apropriate time
 
 // Message from channel copied into variable node to check node array.
 __global__ void DataPassGB_0(int * VtoC, int * Receivedword, int * Interleaver, int N, int NbBranch) {
@@ -236,6 +245,7 @@ __global__ void APP_GB(int* Decide, int* CtoV, int* Receivedword, int* Interleav
       // 
       for (unsigned stride = 0; stride < strides; stride++) {
 
+         // TODO this is not coalesced at all
          node_idx = Interleaver[id * strides + stride];
          Global += (-2) * CtoV[node_idx] + 1;
       }
@@ -252,7 +262,7 @@ __global__ void ComputeSyndrome(int * Synd, int * Decide, int M, int NbBranch) {
    unsigned id = threadIdx.x + blockIdx.x * blockDim.x;
 
    // intialize ___ regardless of bounds...
-   Synd[id] = 0;
+   int synd = 0;
 
    if (id < M) {
 
@@ -263,9 +273,12 @@ __global__ void ComputeSyndrome(int * Synd, int * Decide, int M, int NbBranch) {
 
          __syncthreads();
 
-         Synd[id] = Synd[id] ^ Decide[Mat_device[id * strides + stride]];
+         synd ^=Decide[Mat_device[id * strides + stride]];
       }
    }
+
+   // NOTE write back regardless of thread
+   Synd[id]=synd;
 }
 
 // 
@@ -310,7 +323,7 @@ unsigned GaussianElimination_MRB(int* Perm, int** MatOut, int** Mat, int M, int 
       // If a "1" is found on the column, permutation of rows
       if (ind < M) {
 
-         // 
+         // swap row "m" with row "ind" from "indColumn" to the end of the row
          for (unsigned n = indColumn; n < N; n++) {
             buf = Mat[m][n];
             Mat[m][n] = Mat[ind][n];
@@ -323,7 +336,7 @@ unsigned GaussianElimination_MRB(int* Perm, int** MatOut, int** Mat, int M, int 
             // 
             if (Mat[m1][indColumn] == 1) {
 
-               // 
+               // XOR row "m1" with row "m" from "indColumn" to the end of the row
                for (unsigned n = indColumn; n < N; n++) {
                   Mat[m1][n] = Mat[m1][n] ^ Mat[m][n];
                }
@@ -375,9 +388,24 @@ unsigned GaussianElimination_MRB(int* Perm, int** MatOut, int** Mat, int M, int 
    return Rank;
 }
 
-//#####################################################################################################
+unsigned long diff_time_usec(struct timeval start, struct timeval stop){
+  unsigned long diffTime;
+  if(stop.tv_usec < start.tv_usec){
+   diffTime = 1000000 + stop.tv_usec-start.tv_usec;
+        diffTime += 1000000 * (stop.tv_sec - 1 - start.tv_sec);
+  }
+  else{
+   diffTime = stop.tv_usec - start.tv_usec;
+        diffTime += 1000000 * (stop.tv_sec - start.tv_sec);
+  }
+  return diffTime;
+}
+
 
 int main(int argc, char * argv[]) {
+
+   struct timeval start,stop;
+   unsigned long diffTime=0;
 
    // 
    FILE * f;
@@ -413,7 +441,7 @@ int main(int argc, char * argv[]) {
    NBframes = 100; // Simulation stops when NBframes in error
    Graine = 1; // Seed Initialization for Multiple Simulations
 
-   // brkunl
+   // shortend for testing purposes, was alpha_max=0.06
    alpha_max = 0.03; //Channel Crossover Probability Max and Min
    alpha_min = 0.03;
    alpha_step = 0.01;
@@ -614,20 +642,22 @@ int main(int argc, char * argv[]) {
       cudaMemcpy(CtoV_device, CtoV_host, NbBranch * sizeof(int), cudaMemcpyHostToDevice);
       cudaMemcpy(VtoC_device, VtoC_host, NbBranch * sizeof(int), cudaMemcpyHostToDevice);
 
+#ifdef PROFILE 
+  gettimeofday(&start,NULL);
+#endif 
+
       // encoding
       for (nb = 0, nbtestedframes = 0; nb < NbMonteCarlo; nb++) {
          
          //
-         for (k = 0; k < rank; k++) {
-            U[k] = 0;
-         }
+         memset(U,0,rank*sizeof(int));
          
          // 
          for (k = rank; k < N; k++) {
             U[k] = floor(drand48() * 2);
          }
 
-         // 
+         // TODO this is what takes ~60% of the whole program
          for (k = rank - 1; k >= 0; k--) {
             for (l = k + 1; l < N; l++) {
                U[k] = U[k] ^ (MatG[k][l] * U[l]);
@@ -756,6 +786,12 @@ int main(int argc, char * argv[]) {
             break;
          }
       }
+
+#ifdef PROFILE  
+  gettimeofday(&stop,NULL);  
+  diffTime = diff_time_usec(start,stop);  
+  fprintf(stderr,"time for loops in MicroSec: %lu \n",diffTime);
+#endif 
 
       printf("%1.5f\t\t", alpha);
       printf("%10d (%1.6f)\t\t", NbBitError, (float) NbBitError / N / nbtestedframes);
