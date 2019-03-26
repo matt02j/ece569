@@ -35,8 +35,6 @@
    
 #define PROFILE
 
-#define PROFILE
-
 __constant__ int Mat_device[5184];
 
 // TODO Verify stride paterns
@@ -394,20 +392,6 @@ unsigned GaussianElimination_MRB(int* Perm, int** MatOut, int** Mat, int M, int 
 
    return Rank;
 }
-
-unsigned long diff_time_usec(struct timeval start, struct timeval stop){
-  unsigned long diffTime;
-  if(stop.tv_usec < start.tv_usec){
-   diffTime = 1000000 + stop.tv_usec-start.tv_usec;
-        diffTime += 1000000 * (stop.tv_sec - 1 - start.tv_sec);
-  }
-  else{
-   diffTime = stop.tv_usec - start.tv_usec;
-        diffTime += 1000000 * (stop.tv_sec - start.tv_sec);
-  }
-  return diffTime;
-}
-
 
 unsigned long diff_time_usec(struct timeval start, struct timeval stop){
   unsigned long diffTime;
