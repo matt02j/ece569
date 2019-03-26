@@ -13,6 +13,7 @@
 // Description:      : Probabalistic Gallager B
 //                   :
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+
 #include <stdlib.h> 
 #include <stdio.h> 
 #include <string.h> 
@@ -32,6 +33,8 @@
 #define BPSK(x)(1 - 2 * (x))
 #define PI 3.1415926536
    
+#define PROFILE
+
 #define PROFILE
 
 __constant__ int Mat_device[5184];
@@ -57,6 +60,9 @@ __constant__ int Mat_device[5184];
 // TODO Main is reading args in the most horendous way ive
 // ever seen, us fstreams, arg parser, ect anything to make
 // that not what it is
+// also uses 4 different input files, 3 of which are only dimensions
+//
+// TODO replace calloc with mallocs where possible
 //
 // also uses 4 different input files, 3 of which are only dimensions
 // TODO replace calloc with mallocs where possible
@@ -263,9 +269,10 @@ __global__ void ComputeSyndrome(int * Synd, int * Decide, int M, int NbBranch) {
 
    // intialize ___ regardless of bounds...
    int synd = 0;
-
+   
    if (id < M) {
-
+      //Synd[id] = 0;
+      int synd=0;
       unsigned strides = (NbBranch / M);
 
       // 
@@ -402,7 +409,25 @@ unsigned long diff_time_usec(struct timeval start, struct timeval stop){
 }
 
 
+unsigned long diff_time_usec(struct timeval start, struct timeval stop){
+  unsigned long diffTime;
+  if(stop.tv_usec < start.tv_usec){
+	diffTime = 1000000 + stop.tv_usec-start.tv_usec;
+        diffTime += 1000000 * (stop.tv_sec - 1 - start.tv_sec);
+  }
+  else{
+	diffTime = stop.tv_usec - start.tv_usec;
+        diffTime += 1000000 * (stop.tv_sec - start.tv_sec);
+  }
+  return diffTime;
+}
+
 int main(int argc, char * argv[]) {
+   if(argc < 3 ){
+      fprintf(stderr,"Usage: PGaB /Path/To/Data/File Path/to/output/file");
+   }
+  struct timeval start,stop;
+  unsigned long diffTime=0;
 
    struct timeval start,stop;
    unsigned long diffTime=0;
@@ -490,7 +515,7 @@ int main(int argc, char * argv[]) {
          ColumnDegree[Mat_host[m][k]]++;
       }
    }
-
+   //TODO free filename and filematrix
    printf("Matrix Loaded \n");
 
    // ----------------------------------------------------
@@ -587,6 +612,7 @@ int main(int argc, char * argv[]) {
 
    MatG = (int ** ) calloc(M, sizeof(int * ));
    
+
    for (m = 0; m < M; m++) {
       MatG[m] = (int * ) calloc(N, sizeof(int));
    }
@@ -642,17 +668,16 @@ int main(int argc, char * argv[]) {
       cudaMemcpy(CtoV_device, CtoV_host, NbBranch * sizeof(int), cudaMemcpyHostToDevice);
       cudaMemcpy(VtoC_device, VtoC_host, NbBranch * sizeof(int), cudaMemcpyHostToDevice);
 
+      // encoding
 #ifdef PROFILE 
   gettimeofday(&start,NULL);
 #endif 
-
-      // encoding
       for (nb = 0, nbtestedframes = 0; nb < NbMonteCarlo; nb++) {
          
          //
          memset(U,0,rank*sizeof(int));
          
-         // 
+         // randomly gerenates a uniform distribution of 0s and 1s
          for (k = rank; k < N; k++) {
             U[k] = floor(drand48() * 2);
          }
@@ -664,7 +689,7 @@ int main(int argc, char * argv[]) {
             }
          }
 
-         // 
+         //
          for (k = 0; k < N; k++) {
             Codeword[PermG[k]] = U[k];
          }
@@ -686,13 +711,11 @@ int main(int argc, char * argv[]) {
          // Decoder
          //============================================================================
          
-         for (k = 0; k < NbBranch; k++) {
-            CtoV_host[k] = 0;
-         }
+      	//
+      	memset(CtoV_host,0,NbBranch*sizeof(int));
 
-         for (k = 0; k < N; k++) {
-            Decide_host[k] = Receivedword_host[k];
-         }
+      	//
+      	memmove(Decide_host,Receivedword_host,N*sizeof(int));
 
          cudaMemcpy(Receivedword_device, Receivedword_host, N * sizeof(int), cudaMemcpyHostToDevice);
          cudaMemcpy(Decide_device, Decide_host, N * sizeof(int), cudaMemcpyHostToDevice);
@@ -735,7 +758,7 @@ int main(int argc, char * argv[]) {
                Synd_host1 = 1;
             }
 
-            // 
+            // if (IsCodeword) algorithm has converged and we are done, exit the loop
             IsCodeword = Synd_host1;
             if (IsCodeword) {
                break;
@@ -753,7 +776,7 @@ int main(int argc, char * argv[]) {
          //
          for (k = 0; k < N; k++) {
             if (Decide_host[k] != Codeword[k]) {
-               NbError++;
+               ++NbError;
             }
          }
 
