@@ -1,6 +1,10 @@
-all: PGaB GaB
+objects = PGaB.o kernels.o utils.o
 
-PGaB: ../src/PGaB.cu
-	nvcc -g -lineinfo -o PGaB ../src/PGaB.cu -lm
-GaB: ../src/GaB.cu
-	nvcc -g -lineinfo -o GaB ../src/GaB.cu -lm
+all: $(objects)
+	nvcc -g -lineinfo $(objects) -o PGaB -lm -std=c++11
+
+%.o: ../src/%.cu
+	nvcc -I ../src/ -dc $< -o $@ -std=c++11
+
+clean:
+	rm PGaB *.o

@@ -33,7 +33,7 @@ dp2_max=0
 
 # loop through; execute; and sum
 for((i=0; i < 32; i+=1)); do
-	nvprof --log-file nvprof.log ./PGaB ../data/IRISC_dv4_R050_L54_N1296_Dform ../data/IRISC_dv4_R050_L54_N1296_Dform_Res
+	nvprof --log-file nvprof.log ./PGaB ../data/IRISC_dv4_R050_L54_N1296_Dform ../data/IRISC_dv4_R050_L54_N1296_Dform_Res 
 
 	cs_tot=`python -c "print($cs_tot + $(cat nvprof.log | grep ComputeSyndrome | cut -b 28-33))"`
 	cs_avg=`python -c "print($cs_avg + $(cat nvprof.log | grep ComputeSyndrome | cut -b 48-53))"`
