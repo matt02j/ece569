@@ -269,8 +269,7 @@ __global__ void ComputeSyndrome(int * Synd, int * Decide, int M, int NbBranch) {
    int synd = 0;
    
    if (id < M) {
-      //Synd[id] = 0;
-      int synd=0;
+      
       unsigned strides = (NbBranch / M);
 
       // 
@@ -396,11 +395,11 @@ unsigned GaussianElimination_MRB(int* Perm, int** MatOut, int** Mat, int M, int 
 unsigned long diff_time_usec(struct timeval start, struct timeval stop){
   unsigned long diffTime;
   if(stop.tv_usec < start.tv_usec){
-	diffTime = 1000000 + stop.tv_usec-start.tv_usec;
+   diffTime = 1000000 + stop.tv_usec-start.tv_usec;
         diffTime += 1000000 * (stop.tv_sec - 1 - start.tv_sec);
   }
   else{
-	diffTime = stop.tv_usec - start.tv_usec;
+   diffTime = stop.tv_usec - start.tv_usec;
         diffTime += 1000000 * (stop.tv_sec - start.tv_sec);
   }
   return diffTime;
@@ -410,8 +409,6 @@ int main(int argc, char * argv[]) {
    if(argc < 3 ){
       fprintf(stderr,"Usage: PGaB /Path/To/Data/File Path/to/output/file");
    }
-  struct timeval start,stop;
-  unsigned long diffTime=0;
 
    struct timeval start,stop;
    unsigned long diffTime=0;
@@ -695,11 +692,11 @@ int main(int argc, char * argv[]) {
          // Decoder
          //============================================================================
          
-      	//
-      	memset(CtoV_host,0,NbBranch*sizeof(int));
+         //
+         memset(CtoV_host,0,NbBranch*sizeof(int));
 
-      	//
-      	memmove(Decide_host,Receivedword_host,N*sizeof(int));
+         //
+         memmove(Decide_host,Receivedword_host,N*sizeof(int));
 
          cudaMemcpy(Receivedword_device, Receivedword_host, N * sizeof(int), cudaMemcpyHostToDevice);
          cudaMemcpy(Decide_device, Decide_host, N * sizeof(int), cudaMemcpyHostToDevice);
