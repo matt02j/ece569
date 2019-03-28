@@ -17,7 +17,10 @@
 #define UTIL_H
 
 #include "const.cuh"
+
+#ifdef PROFILE
 #include <sys/time.h>
+#endif
 
 // free in 2d (int)
 void free2d(unsigned** mem, const unsigned depth);
@@ -26,7 +29,7 @@ void free2d(unsigned** mem, const unsigned depth);
 void free2d(int** mem, const unsigned depth);
 
 // 
-unsigned GaussianElimination_MRB(int* Perm, int** MatOut, int** Mat, int M, int N);
+unsigned GaussianElimination_MRB(int* Perm, int** MatOut, int** Mat, unsigned M, unsigned N);
 
 // 
 unsigned long diff_time_usec(struct timeval start, struct timeval stop);

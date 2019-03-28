@@ -17,15 +17,18 @@
 #define CONST_H
 
 // for timing
-#define PROFILE
+// #define PROFILE
 
 // for printing to console
 #define VERBOSE
 
 #include <cuda.h>
+#include <cuda_runtime.h>
+#include "device_launch_parameters.h"
+#include "device_functions.h"
+
 #include <math.h> 
 #include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
 #include <stdio.h>
 

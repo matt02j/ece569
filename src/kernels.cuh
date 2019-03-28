@@ -18,7 +18,11 @@
 
 #include "const.cuh"
 
+#ifdef LINUX
 extern __constant__ unsigned Mat_device[5184];
+#else
+__constant__ unsigned Mat_device[5184];
+#endif
 
 // Message from channel copied into variable node to check node array.
 __global__ void DataPassGB_0(int * VtoC, int * Receivedword, unsigned* Interleaver, unsigned N, unsigned num_branches);

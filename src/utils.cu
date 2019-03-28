@@ -34,7 +34,7 @@ void free2d(int** mem, const unsigned depth){
 }
 
 // 
-unsigned GaussianElimination_MRB(int* Perm, int** MatOut, int** Mat, int M, int N) {
+unsigned GaussianElimination_MRB(int* Perm, int** MatOut, int** Mat, unsigned M, unsigned N) {
    
    // 
    int buf;
@@ -140,6 +140,7 @@ unsigned GaussianElimination_MRB(int* Perm, int** MatOut, int** Mat, int M, int 
    return Rank;
 }
 
+#ifdef PROFILE
 //
 unsigned long diff_time_usec(struct timeval start, struct timeval stop){
   unsigned long diffTime;
@@ -153,6 +154,7 @@ unsigned long diff_time_usec(struct timeval start, struct timeval stop){
   }
   return diffTime;
 }
+#endif
 
 // Initialize the NtoB matrix then unroll it into the interleaved matrix
 // TODO could possibly due with an improvement in the NtoB initialization as the current method seems kinda hacky

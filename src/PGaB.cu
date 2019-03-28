@@ -115,11 +115,10 @@ int main(int argc, char * argv[]) {
                                                       // integer value is used so keep numerical value
       FILE* f;                            // file IO, tbTerminated 
       std::string matrixAddr(argv[1]);    // convert data addr to a string
-      unsigned num_branches;              // total number of elements in the test data matrix
+      unsigned num_branches = 0;              // total number of elements in the test data matrix
       unsigned rank;                      // returned from Gaussian Elimination
 
       // Variables for Statistics
-      int IsCodeword;
       int NiterMoy;
       int NiterMax;
       int Dmin;
@@ -145,7 +144,7 @@ int main(int argc, char * argv[]) {
 
       // seed the RNG
       // srand48(time(0) + seed * 31 + 113); // ignore seed, be random
-      srand48(seed * 31 + 113);
+      srand(seed * 31 + 113);
 
       // Initialize grid and block dimensions
       dim3 GridDim1((N - 1) / BLOCK_DIM_1 + 1, 1);
@@ -263,7 +262,7 @@ int main(int argc, char * argv[]) {
 
          NiterMoy = 0;
          NiterMax = 0;
-         Dmin = 1e5;
+         Dmin = 100000;
          NbTotalErrors = 0;
          NbBitError = 0;
          NbUnDetectedErrors = 0;
@@ -287,7 +286,7 @@ int main(int argc, char * argv[]) {
             
             // randomly gerenates a uniform distribution of 0s and 1s
             for (unsigned k = rank; k < N; k++) {
-               U[k] = floor(drand48() * 2);
+               U[k] = (int)floor(rand() * 2);
             }
 
             // TODO this is what takes ~60% of the whole program
@@ -307,7 +306,7 @@ int main(int argc, char * argv[]) {
 
             // Add Noise 
             for (unsigned n = 0; n < N; n++){
-               if (drand48() < alpha){
+               if (rand() < alpha){
                   h_receivedWord[n] = 1 - Codeword[n];
                } 
                else {
@@ -383,19 +382,19 @@ int main(int argc, char * argv[]) {
             NbBitError = NbBitError + NbError;
             
             // Case Divergence
-            if (!IsCodeword) {
+            if (!hasConverged) {
                NiterMoy = NiterMoy + itteration_count;
                NbTotalErrors++;
             }
 
             // Case Convergence to Right Codeword
-            if ((IsCodeword) && (NbError == 0)) {
+            if ((hasConverged) && (NbError == 0)) {
                NiterMax = max(NiterMax, itter + 1);
                NiterMoy = NiterMoy + (itter + 1);
             }
 
             // Case Convergence to Wrong Codeword
-            if ((IsCodeword) && (NbError != 0)) {
+            if ((hasConverged) && (NbError != 0)) {
                NiterMax = max(NiterMax, itter + 1);
                NiterMoy = NiterMoy + (itter + 1);
                NbTotalErrors++;
