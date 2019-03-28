@@ -22,11 +22,9 @@
 // for printing to console
 #define VERBOSE
 
-// #define LINUX
-
 #include <cuda.h>
 
-#ifndef LINUX
+#ifndef __linux
 #include <cuda_runtime.h>
 #include "device_launch_parameters.h"
 #include "device_functions.h"
