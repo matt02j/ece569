@@ -104,7 +104,7 @@ int main(int argc, char * argv[]) {
       unsigned* rowRanks;        // list of codewords widths
       unsigned** data_matrix;    // matrix of codewords on the host
       unsigned* unrolledMatrix;  // unrolled matrix
-      unsigned* histogram;       // histogram for <unk>
+      unsigned* hist;            // histogram for <unk>
       int* U;                    // 
       int* Codeword;             // 
       int** MatFull;             // 
@@ -121,7 +121,6 @@ int main(int argc, char * argv[]) {
 
       // Variables for Statistics
       int IsCodeword;
-      int nb;
       int NiterMoy;
       int NiterMax;
       int Dmin;
@@ -159,26 +158,30 @@ int main(int argc, char * argv[]) {
       rowRanks = (unsigned*) malloc(M * sizeof(unsigned));
       readRowRanks(rowRanks, M, (matrixAddr + "_RowDegree").c_str());
 
-      //alocate and read in test data matrix from local file
+      //alocate and read in test data matrix from local file (also get num_branches while were in this loop)
+      unsigned rank = 0;
       data_matrix = (unsigned**)malloc(M * sizeof(unsigned*));
       for (unsigned m = 0; m < M; m++) {
-         data_matrix[m] = (unsigned*) malloc(rowRanks[m] * sizeof(unsigned));
+         rank = rowRanks[m];
+         num_branches += rank;
+         data_matrix[m] = (unsigned*) malloc(rank * sizeof(unsigned));
       }
       readDataMatrix(data_matrix, rowRanks, M, matrixAddr.c_str());
 
       // allocate and generate histogram on the data
-      histogram = (unsigned*)malloc(N * sizeof(unsigned));
-      histogram(histogram, data_matrix, rowRanks, M, N);
+      hist = (unsigned*)malloc(N * sizeof(unsigned));
+      histogram(hist, data_matrix, rowRanks, M, N);
 
       // allocate and generate interleaver (allocation done in method)
-      num_branches = initInterleaved(h_interleaver, rowRanks, histogram, M, N);
+      h_interleaver = (unsigned*)malloc(num_branches, sizeof(unsigned));
+      initInterleaved(h_interleaver, rowRanks, hist, M, N);
 
       // allocate and unroll host matrix into a flat host vector
-      unrolledMatrix = (unsigned*) malloc(num_branches * sizeof(unsigned));
+      unrolledMatrix = (unsigned*)malloc(num_branches * sizeof(unsigned));
       unrollMatrix(unrolledMatrix, data_matrix, rowRanks, M, num_branches);
 
       // free no longer needed structures
-      free(histogram);
+      free(hist);
 
 #ifdef VERBOSE
       std::cout << "Done." << std::endl;
@@ -277,7 +280,7 @@ int main(int argc, char * argv[]) {
    #ifdef PROFILE 
      gettimeofday(&start,NULL);
    #endif 
-         for (unsigned nb = 0, nbtestedframes = 0; nb < NbMonteCarlo; nb++) {
+         for (unsigned nb = 0, unsigned nbtestedframes = 0; nb < NbMonteCarlo; nb++) {
             
             //
             memset(U,0,rank*sizeof(int));

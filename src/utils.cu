@@ -157,7 +157,7 @@ unsigned long diff_time_usec(struct timeval start, struct timeval stop){
 // Initialize the NtoB matrix then unroll it into the interleaved matrix
 // TODO could possibly due with an improvement in the NtoB initialization as the current method seems kinda hacky
 // return num_branches
-unsigned initInterleaved(unsigned* h_interleaver, const unsigned* rowRanks, const unsigned* histogram, const unsigned depth, const unsigned max_val){
+void initInterleaved(unsigned* h_interleaver, const unsigned* rowRanks, const unsigned* histogram, const unsigned depth, const unsigned max_val){
       
       /*******
       * NtoB *
@@ -213,9 +213,6 @@ unsigned initInterleaved(unsigned* h_interleaver, const unsigned* rowRanks, cons
       /**************
       * Interleaver *
       **************/
-
-      // allocate
-      h_interleaver = (unsigned*)malloc(num_branches, sizeof(unsigned));
 
       // unroll NtoB into interleaver vector
       unsigned i = 0;
