@@ -21,24 +21,24 @@
 extern __constant__ unsigned Mat_device[5184];
 
 // Message from channel copied into variable node to check node array.
-__global__ void DataPassGB_0(int * VtoC, int * Receivedword, unsigned* Interleaver, unsigned N, unsigned NbBranch);
+__global__ void DataPassGB_0(int * VtoC, int * Receivedword, unsigned* Interleaver, unsigned N, unsigned num_branches);
 
 // for iterations between 1 and 15, this kernel launches to pass the message from variables nodes onto 
 // the four check nodes it is connected to.
-__global__ void DataPassGB_1(int* VtoC, int* CtoV, int* Receivedword, unsigned* Interleaver, unsigned N, unsigned NbBranch);
+__global__ void DataPassGB_1(int* VtoC, int* CtoV, int* Receivedword, unsigned* Interleaver, unsigned N, unsigned num_branches);
 
 // for iterations greater than 15, this kernel launches to pass the message from variables nodes onto the four 
 // check nodes it is connected to.
-__global__ void DataPassGB_2(int* VtoC, int* CtoV, int* Receivedword, unsigned* Interleaver, unsigned N, unsigned NbBranch, unsigned varr);
+__global__ void DataPassGB_2(int* VtoC, int* CtoV, int* Receivedword, unsigned* Interleaver, unsigned N, unsigned num_branches, unsigned varr);
 
 // This kernel is launched to check if the CtoV copies the same information as VtoC depending upon the signe value
-__global__ void CheckPassGB(int* CtoV, int* VtoC, unsigned M, unsigned NbBranch);
+__global__ void CheckPassGB(int* CtoV, int* VtoC, unsigned M, unsigned num_branches);
 
 // The following kernel is launched to decide each check node's decision whether the corresponding variable nodes 
 // are in error or not.
-__global__ void APP_GB(int* Decide, int* CtoV, int* Receivedword, unsigned* Interleaver, unsigned N, unsigned NbBranch);
+__global__ void APP_GB(int* Decide, int* CtoV, int* Receivedword, unsigned* Interleaver, unsigned N, unsigned num_branches);
 
 //Here a cumulative decision is made on the variable node error depending upon all the four check nodes to which the variable node is connected to 
-__global__ void ComputeSyndrome(int * Synd, int * Decide, unsigned M, unsigned NbBranch);
+__global__ void ComputeSyndrome(int * Synd, int * Decide, unsigned M, unsigned num_branches);
 
 #endif
