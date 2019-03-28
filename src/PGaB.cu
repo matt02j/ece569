@@ -173,7 +173,7 @@ int main(int argc, char * argv[]) {
 
       // allocate and generate interleaver (allocation done in method)
       h_interleaver = (unsigned*)malloc(num_branches * sizeof(unsigned));
-      initInterleaved(h_interleaver, rowRanks, hist, M, N);
+      initInterleaved(h_interleaver, data_matrix, rowRanks, hist, M, N);
 
       // allocate and unroll host matrix into a flat host vector
       unrolledMatrix = (unsigned*)malloc(num_branches * sizeof(unsigned));

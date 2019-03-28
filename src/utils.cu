@@ -18,19 +18,19 @@
 // free in 2d (int)
 void free2d(unsigned** mem, const unsigned depth){
 
-   for (unsigned i = 0; i < max_val; i++) {
+   for (unsigned i = 0; i < depth; i++) {
       free(mem[i]);
    }
-   free(mem)
+   free(mem);
 }
 
 // free in 2d (unsigned)
 void free2d(int** mem, const unsigned depth){
 
-   for (unsigned i = 0; i < max_val; i++) {
+   for (unsigned i = 0; i < depth; i++) {
       free(mem[i]);
    }
-   free(mem)
+   free(mem);
 }
 
 // 
@@ -157,21 +157,22 @@ unsigned long diff_time_usec(struct timeval start, struct timeval stop){
 // Initialize the NtoB matrix then unroll it into the interleaved matrix
 // TODO could possibly due with an improvement in the NtoB initialization as the current method seems kinda hacky
 // return num_branches
-void initInterleaved(unsigned* h_interleaver, const unsigned* rowRanks, const unsigned* histogram, const unsigned depth, const unsigned max_val){
+void initInterleaved(unsigned* h_interleaver, unsigned** data_matrix, const unsigned* rowRanks, const unsigned* histogram, const unsigned depth, const unsigned max_val){
       
       /*******
       * NtoB *
       *******/
 
       // temp array the length of max_val in the input matrix
-      int* ind;
-      ind = (int*)calloc(max_val, sizeof(int));
+      unsigned* ind;
+      ind = (unsigned*)calloc(max_val, sizeof(unsigned));
       
       // allocate another matrix 
       // where col width is based on the histogram results
-      NtoB = (unsigned**)malloc(max_val, sizeof(unsigned*));
+      unsigned** NtoB;
+      NtoB = (unsigned**)malloc(max_val * sizeof(unsigned*));
       for (unsigned i = 0; i < max_val; i++) {
-         NtoB[i] = (unsigned*)malloc(histogram[i], sizeof(unsigned));
+         NtoB[i] = (unsigned*)malloc(histogram[i] * sizeof(unsigned));
       }
 
       // during the next loop calculate the total branches
@@ -226,8 +227,6 @@ void initInterleaved(unsigned* h_interleaver, const unsigned* rowRanks, const un
 
       // Free NtoB matrix
       free2d(NtoB, max_val);
-
-      return num_branches;
 }
 
 // read in row rank matrix from local file
