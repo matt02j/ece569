@@ -15,6 +15,24 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 #include "utils.cuh"
 
+// free in 2d (int)
+void free2d(unsigned** mem, const unsigned depth){
+
+   for (unsigned i = 0; i < max_val; i++) {
+      free(mem[i]);
+   }
+   free(mem)
+}
+
+// free in 2d (unsigned)
+void free2d(int** mem, const unsigned depth){
+
+   for (unsigned i = 0; i < max_val; i++) {
+      free(mem[i]);
+   }
+   free(mem)
+}
+
 // 
 unsigned GaussianElimination_MRB(int* Perm, int** MatOut, int** Mat, int M, int N) {
    
@@ -134,4 +152,135 @@ unsigned long diff_time_usec(struct timeval start, struct timeval stop){
         diffTime += 1000000 * (stop.tv_sec - start.tv_sec);
   }
   return diffTime;
+}
+
+// Initialize the NtoB matrix then unroll it into the interleaved matrix
+// TODO could possibly due with an improvement in the NtoB initialization as the current method seems kinda hacky
+// return num_branches
+unsigned initInterleaved(unsigned* h_interleaver, const unsigned* rowRanks, const unsigned* histogram, const unsigned depth, const unsigned max_val){
+      
+      /*******
+      * NtoB *
+      *******/
+
+      // temp array the length of max_val in the input matrix
+      int* ind;
+      ind = (int*)calloc(max_val, sizeof(int));
+      
+      // allocate another matrix 
+      // where col width is based on the histogram results
+      NtoB = (unsigned**)malloc(max_val, sizeof(unsigned*));
+      for (unsigned i = 0; i < max_val; i++) {
+         NtoB[i] = (unsigned*)malloc(histogram[i], sizeof(unsigned));
+      }
+
+      // during the next loop calculate the total branches
+      unsigned num_branches = 0;
+
+      //
+      unsigned col = 0;
+      unsigned branch = 0;
+      unsigned ind_loc = 0;   // local ind
+      unsigned row_rank = 0;
+      for (unsigned i = 0; i < depth; i++) {
+
+         // read the row rank, for inner for loop and total branch counter
+         row_rank = rowRanks[i];
+         num_branches += row_rank;
+         for (unsigned j = 0; j < row_rank; j++) {
+            
+            // read host matrix element
+            col = data_matrix[i][j];
+
+            // read from the ind, given the host value
+            ind_loc = ind[col];
+
+            // set NtoB element
+            NtoB[col][ind_loc] = branch;
+
+            // increment the local ind and branch counter
+            ind_loc++;
+            branch++;
+
+            // update ind in memory
+            ind[col] = ind_loc;
+         }
+      }
+
+      // dont need this anymore
+      free(ind);
+
+      /**************
+      * Interleaver *
+      **************/
+
+      // unroll NtoB into interleaver vector
+      unsigned i = 0;
+      for (unsigned n = 0; n < max_val; n++) {
+         for (unsigned k = 0; k < histogram[n]; k++) {
+            
+            h_interleaver[i] = NtoB[n][k];
+            i++;
+         }
+      }
+
+      // Free NtoB matrix
+      free2d(NtoB, max_val);
+
+      return num_branches;
+}
+
+// read in row rank matrix from local file
+void readRowRanks(unsigned* rowRanks, const unsigned depth, const char* fileName){
+
+   // read from file
+   // TODO use streaming, even consider reformatting data vectors to allow one liner read
+   FILE* f;
+   f = fopen(fileName, "r");
+   for (unsigned m = 0; m < depth; m++) {
+      fscanf(f, "%d", &rowRanks[m]);
+   }
+   fclose(f);
+}
+
+// read in data matrix from local file
+void readDataMatrix(unsigned** data_matrix, const unsigned* rowRanks, const unsigned depth, const char* fileName){
+
+   // read in from matrix data file to the host matrix in memory
+   // TODO use streaming, even consider reformatting data vectors to allow one liner read
+   FILE* f;
+   f = fopen(fileName, "r");
+   for (unsigned m = 0; m < depth; m++) {
+      for (unsigned k = 0; k < rowRanks[m]; k++) {
+         fscanf(f, "%d", & data_matrix[m][k]);
+      }
+   }
+   fclose(f);
+}
+
+// Histogram
+void histogram(unsigned* histogram, const unsigned** data_matrix, const unsigned* rowRanks, const unsigned depth, const unsigned max_val){
+
+      // do histogram
+      for (unsigned m = 0; m < depth; m++) {
+         for (unsigned k = 0; k < rowRanks[m]; k++){
+            histogram[data_matrix[m][k]]++;
+         }
+      }
+}
+
+// unroll the data matrix
+void unrollMatrix(unsigned* unrolledMatrix, const unsigned** data_matrix, const unsigned* rowRanks, const unsigned depth, const unsigned num_branches){
+
+   // 
+   unrolledMatrix = (int*) malloc(num_branches * sizeof(int));
+   
+   // unroll the memory
+   unsigned i = 0;
+   for (unsigned m = 0; m < depth; m++) {
+      for (unsigned n = 0; n < rowRanks[m]; n++) {
+         unrolledMatrix[i] = data_matrix[m][n];
+         i++;
+      }
+   }
 }

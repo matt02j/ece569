@@ -25,4 +25,23 @@ unsigned GaussianElimination_MRB(int* Perm, int** MatOut, int** Mat, int M, int 
 // 
 unsigned long diff_time_usec(struct timeval start, struct timeval stop);
 
+// Initialize the NtoB matrix then unroll it into the interleaved matrix
+// TODO could possibly due with an improvement in the NtoB initialization as the current method seems kinda hacky
+// return num_branches
+unsigned initInterleaved(unsigned* h_interleaved, const unsigned* rowRanks, const unsigned* histogram, const unsigned depth, const unsigned max_val);
+
+// read in row rank matrix from local file
+void readRowRanks(unsigned* rowRanks, const unsigned depth, const char* fileName);
+
+// read in data matrix from local file
+void readDataMatrix(unsigned** data_matrix, const unsigned* rowRanks, const unsigned depth, const char* fileName);
+
+// Histogram
+void histogram(unsigned* histogram, const unsigned** data_matrix, const unsigned* rowRanks, const unsigned depth, const unsigned max_val);
+
+// unroll the data matrix
+void unrollMatrix(unsigned* unrolledMatrix, const unsigned** data_matrix, const unsigned* rowRanks, const unsigned depth, const unsigned num_branches);
+
+
+
 #endif

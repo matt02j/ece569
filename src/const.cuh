@@ -16,6 +16,12 @@
 #ifndef CONST_H
 #define CONST_H
 
+// for timing
+#define PROFILE
+
+// for printing to console
+#define VERBOSE
+
 #include <cuda.h>
 #include <math.h> 
 #include <stdlib.h>
@@ -33,5 +39,7 @@
 constexpr double PI = 3.1415926536;
 constexpr unsigned M = 648;
 constexpr unsigned N = 1296;
+constexpr unsigned BLOCK_DIM_1 = 1024;
+constexpr unsigned BLOCK_DIM_2 = 1024;
 
 #endif
