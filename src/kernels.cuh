@@ -18,7 +18,7 @@
 
 #include "const.cuh"
 
-#ifdef LINUX
+#ifdef __linux
 extern __constant__ unsigned Mat_device[5184];
 #else
 __constant__ unsigned Mat_device[5184];

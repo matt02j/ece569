@@ -22,7 +22,7 @@
 // for printing to console
 #define VERBOSE
 
-#define LINUX
+// #define LINUX
 
 #include <cuda.h>
 
