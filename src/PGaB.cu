@@ -79,8 +79,7 @@ int main(int argc, char * argv[]) {
       unsigned seed = 42;               // Seed Initialization for consistent Simulations
 
       // Channel Crossover Probability Max and Min
-      float alpha = 0.01f;     // Channel probability of error
-      float alpha_max = 0.03f; // shortend for testing purposes, was alpha_max=0.06
+      float alpha_max = 0.03f; // alpha_max=0.06
       float alpha_min = 0.03f; 
       float alpha_step = 0.01f;
 
@@ -260,7 +259,7 @@ int main(int argc, char * argv[]) {
       std::cout << "Running Gaussian Elimination...";
 #endif
       // loop from alpha max to alpha min
-      for (unsigned alpha = alpha_max; alpha >= alpha_min; alpha -= alpha_step) {
+      for (float alpha = alpha_max; alpha >= alpha_min; alpha -= alpha_step) {
 
          NiterMoy = 0;
          NiterMax = 0;
