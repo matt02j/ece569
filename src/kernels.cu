@@ -15,7 +15,7 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 #include "kernels.cuh"
 
-__constant__ int Mat_device[5184];
+__constant__ unsigned Mat_device[5184];
 
 // Message from channel copied into variable node to check node array.
 __global__ void DataPassGB_0(int * VtoC, int * Receivedword, unsigned* Interleaver, unsigned N, unsigned NbBranch) {
