@@ -29,7 +29,7 @@ __global__ void DataPassGB_1(int* VtoC, int* CtoV, int* Receivedword, unsigned* 
 
 // for iterations greater than 15, this kernel launches to pass the message from variables nodes onto the four 
 // check nodes it is connected to.
-__global__ void DataPassGB_2(int* VtoC, int* CtoV, int* Receivedword, unsigned* Interleaver, int N, unsigned NbBranch, unsigned varr);
+__global__ void DataPassGB_2(int* VtoC, int* CtoV, int* Receivedword, unsigned* Interleaver, unsigned N, unsigned NbBranch, unsigned varr);
 
 // This kernel is launched to check if the CtoV copies the same information as VtoC depending upon the signe value
 __global__ void CheckPassGB(int* CtoV, int* VtoC, unsigned M, unsigned NbBranch);
