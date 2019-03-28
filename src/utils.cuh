@@ -19,6 +19,12 @@
 #include "const.cuh"
 #include <sys/time.h>
 
+// free in 2d (int)
+void free2d(unsigned** mem, const unsigned depth);
+
+// free in 2d (unsigned)
+void free2d(int** mem, const unsigned depth);
+
 // 
 unsigned GaussianElimination_MRB(int* Perm, int** MatOut, int** Mat, int M, int N);
 
@@ -41,7 +47,5 @@ void histogram(unsigned* histogram, const unsigned** data_matrix, const unsigned
 
 // unroll the data matrix
 void unrollMatrix(unsigned* unrolledMatrix, const unsigned** data_matrix, const unsigned* rowRanks, const unsigned depth, const unsigned num_branches);
-
-
 
 #endif

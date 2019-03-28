@@ -73,7 +73,7 @@ int main(int argc, char * argv[]) {
       // --------------------------------------------------------------------------
 
       //-------------------------Simulation parameters for PGaB-------------------------
-      float NbMonteCarlo = 1000000f;   // Maximum number of codewords sent
+      float NbMonteCarlo = 1000000.0f;   // Maximum number of codewords sent
       unsigned itteration_count = 100; // Maximum nb of iterations
       unsigned frame_count = 100;      // Simulation stops when frame_count in error
       unsigned seed = 42;               // Seed Initialization for consistent Simulations
@@ -167,15 +167,18 @@ int main(int argc, char * argv[]) {
       readDataMatrix(data_matrix, rowRanks, M, matrixAddr.c_str());
 
       // allocate and generate histogram on the data
-      histogram = (unsigned*)malloc(max_val * sizeof(unsigned));
+      histogram = (unsigned*)malloc(N * sizeof(unsigned));
       histogram(histogram, data_matrix, rowRanks, M, N);
 
-      // allocate and generate interleaver
-      h_interleaver = (unsigned*)malloc(num_branches, sizeof(unsigned));
+      // allocate and generate interleaver (allocation done in method)
       num_branches = initInterleaved(h_interleaver, rowRanks, histogram, M, N);
 
-      // unroll host matrix into a flat host vector
+      // allocate and unroll host matrix into a flat host vector
+      unrolledMatrix = (unsigned*) malloc(num_branches * sizeof(unsigned));
       unrollMatrix(unrolledMatrix, data_matrix, rowRanks, M, num_branches);
+
+      // free no longer needed structures
+      free(histogram);
 
 #ifdef VERBOSE
       std::cout << "Done." << std::endl;
@@ -235,11 +238,13 @@ int main(int argc, char * argv[]) {
       }
       rank = GaussianElimination_MRB(PermG, MatG, MatFull, M, N);
 
-      // no longer need 2d data matrix
+      // free no longer needed data structures
       free2d(MatFull, M);
       free2d(data_matrix, M);
+      free(rowRanks);
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-      f = fopen(matrixAddr+"_Res", "w");
+      f = fopen((matrixAddr+"_Res").c_str(), "w");
       fprintf(f, "-------------------------Gallager B--------------------------------------------------\n");
       fprintf(f, "alpha\t\tNbEr(BER)\t\tNbFer(FER)\t\tNbtested\t\tIterAver(Itermax)\tNbUndec(Dmin)\n");
 

@@ -214,6 +214,9 @@ unsigned initInterleaved(unsigned* h_interleaver, const unsigned* rowRanks, cons
       * Interleaver *
       **************/
 
+      // allocate
+      h_interleaver = (unsigned*)malloc(num_branches, sizeof(unsigned));
+
       // unroll NtoB into interleaver vector
       unsigned i = 0;
       for (unsigned n = 0; n < max_val; n++) {
@@ -271,9 +274,6 @@ void histogram(unsigned* histogram, const unsigned** data_matrix, const unsigned
 
 // unroll the data matrix
 void unrollMatrix(unsigned* unrolledMatrix, const unsigned** data_matrix, const unsigned* rowRanks, const unsigned depth, const unsigned num_branches){
-
-   // 
-   unrolledMatrix = (int*) malloc(num_branches * sizeof(int));
    
    // unroll the memory
    unsigned i = 0;
