@@ -159,7 +159,7 @@ unsigned long diff_time_usec(struct timeval start, struct timeval stop){
 // Initialize the NtoB matrix then unroll it into the interleaved matrix
 // TODO could possibly due with an improvement in the NtoB initialization as the current method seems kinda hacky
 // return num_branches
-void initInterleaved(unsigned* h_interleaver, unsigned** data_matrix, const unsigned* rowRanks, const unsigned* histogram, const unsigned depth, const unsigned max_val){
+void initInterleaved(unsigned* h_interleaver, unsigned** data_matrix, const unsigned* rowRanks, const unsigned* hist, const unsigned depth, const unsigned max_val){
       
       /*******
       * NtoB *
@@ -170,27 +170,21 @@ void initInterleaved(unsigned* h_interleaver, unsigned** data_matrix, const unsi
       ind = (unsigned*)calloc(max_val, sizeof(unsigned));
       
       // allocate another matrix 
-      // where col width is based on the histogram results
+      // where col width is based on the hist results
       unsigned** NtoB;
+	  unsigned histy;
       NtoB = (unsigned**)malloc(max_val * sizeof(unsigned*));
       for (unsigned i = 0; i < max_val; i++) {
-         NtoB[i] = (unsigned*)malloc(histogram[i] * sizeof(unsigned));
+		 histy = hist[i];
+         NtoB[i] = (unsigned*)malloc(histy * sizeof(unsigned));
       }
-
-      // during the next loop calculate the total branches
-      unsigned num_branches = 0;
 
       //
       unsigned col = 0;
       unsigned branch = 0;
       unsigned ind_loc = 0;   // local ind
-      unsigned row_rank = 0;
       for (unsigned i = 0; i < depth; i++) {
-
-         // read the row rank, for inner for loop and total branch counter
-         row_rank = rowRanks[i];
-         num_branches += row_rank;
-         for (unsigned j = 0; j < row_rank; j++) {
+         for (unsigned j = 0; j < rowRanks[i]; j++) {
             
             // read host matrix element
             col = data_matrix[i][j];
@@ -220,7 +214,7 @@ void initInterleaved(unsigned* h_interleaver, unsigned** data_matrix, const unsi
       // unroll NtoB into interleaver vector
       unsigned i = 0;
       for (unsigned n = 0; n < max_val; n++) {
-         for (unsigned k = 0; k < histogram[n]; k++) {
+         for (unsigned k = 0; k < hist[n]; k++) {
             
             h_interleaver[i] = NtoB[n][k];
             i++;
@@ -259,13 +253,13 @@ void readDataMatrix(unsigned** data_matrix, const unsigned* rowRanks, const unsi
    fclose(f);
 }
 
-// Histogram
-void histogram(unsigned* histogram, unsigned** data_matrix, const unsigned* rowRanks, const unsigned depth, const unsigned max_val){
+// histogram
+void histogram(unsigned* hist, unsigned** data_matrix, const unsigned* rowRanks, const unsigned depth, const unsigned max_val){
 
-      // do histogram
+      // do hist
       for (unsigned m = 0; m < depth; m++) {
          for (unsigned k = 0; k < rowRanks[m]; k++){
-            histogram[data_matrix[m][k]]++;
+            hist[data_matrix[m][k]]++;
          }
       }
 }

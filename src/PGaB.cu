@@ -111,6 +111,8 @@ int main(int argc, char * argv[]) {
       int* PermG;                // 
       
       //------------------------------------Miscellenious Variables------------------------------------
+      // srand(time(0) + seed * 31 + 113); // ignore seed, be random
+	  srand(seed * 31 + 113);
       unsigned varr = (rand() % 100 >= 80)? 1 : 0;    // stochastic semi-boolean variable, 
                                                       // integer value is used so keep numerical value
       FILE* f;                            // file IO, tbTerminated 
@@ -142,10 +144,6 @@ int main(int argc, char * argv[]) {
       // Before allocating most of the memory, some 
       // preliminary calculations and file reads must be done
 
-      // seed the RNG
-      // srand48(time(0) + seed * 31 + 113); // ignore seed, be random
-      srand(seed * 31 + 113);
-
       // Initialize grid and block dimensions
       dim3 GridDim1((N - 1) / BLOCK_DIM_1 + 1, 1);
       dim3 BlockDim1(BLOCK_DIM_1);
@@ -167,7 +165,7 @@ int main(int argc, char * argv[]) {
       readDataMatrix(data_matrix, rowRanks, M, matrixAddr.c_str());
 
       // allocate and generate histogram on the data
-      hist = (unsigned*)malloc(N * sizeof(unsigned));
+      hist = (unsigned*)calloc(N, sizeof(unsigned));
       histogram(hist, data_matrix, rowRanks, M, N);
 
       // allocate and generate interleaver (allocation done in method)
