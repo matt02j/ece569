@@ -16,7 +16,6 @@
 
 #include <string>
 #include <iostream>
-// #include <omp.h>
 
 #include "const.cuh"
 #include "utils.cuh"
@@ -186,7 +185,7 @@ int main(int argc, char * argv[]) {
    }
    
    Mat_host1 = (int * ) calloc(NbBranch, sizeof(int));
-   
+   //TODO this is just a conversion of a 2d matrix into a 1d array, is this necesarry?
    for (m = 0; m < M; m++) {
       for (n = 0; n < 8; n++) {
          Mat_host1[m * 8 + n] = Mat_host[m][n];
@@ -225,8 +224,8 @@ int main(int argc, char * argv[]) {
    cudaMalloc((void ** ) & Decide_device, N * sizeof(int));
    cudaMalloc((void ** ) & Interleaver_device, NbBranch * sizeof(int));
    U = (int * ) calloc(N, sizeof(int));
-   srand48(time(0) + Graine * 31 + 113);
-
+   //srand48(time(0) + Graine * 31 + 113);
+   srand48(1);
    //Initializing grid and block dimensions
 
    dim3 GridDim1((N - 1) / 1024 + 1, 1);
@@ -292,16 +291,19 @@ int main(int argc, char * argv[]) {
       NbUnDetectedErrors = 0;
       NbError = 0;
 
+#ifdef PROFILE 
+  gettimeofday(&start,NULL);
+#endif
       // Copying contents from the host to the device
       cudaMemcpy(Interleaver_device, Interleaver_host, NbBranch * sizeof(int), cudaMemcpyHostToDevice);
       cudaMemcpyToSymbol(Mat_device, Mat_host1, NbBranch * sizeof(int));
+
+	//these are both all 0s? 
       cudaMemcpy(CtoV_device, CtoV_host, NbBranch * sizeof(int), cudaMemcpyHostToDevice);
       cudaMemcpy(VtoC_device, VtoC_host, NbBranch * sizeof(int), cudaMemcpyHostToDevice);
 
       // encoding
-#ifdef PROFILE 
-  gettimeofday(&start,NULL);
-#endif 
+ 
       for (nb = 0, nbtestedframes = 0; nb < NbMonteCarlo; nb++) {
          
          //
@@ -342,7 +344,7 @@ int main(int argc, char * argv[]) {
          //============================================================================
          
          //
-         memset(CtoV_host,0,NbBranch*sizeof(int));
+         //memset(CtoV_host,0,NbBranch*sizeof(int));
 
          //
          memmove(Decide_host,Receivedword_host,N*sizeof(int));
@@ -363,11 +365,11 @@ int main(int argc, char * argv[]) {
                DataPassGB_2<<<GridDim1, BlockDim1>>>(VtoC_device, CtoV_device, Receivedword_device, Interleaver_device, N, NbBranch, varr);
             }
 
-            CheckPassGB<<<GridDim2, BlockDim2>>>(CtoV_device, VtoC_device, M, NbBranch);
+            CheckPassGB<<<GridDim2, BlockDim2, NbBranch*sizeof(int)>>>(CtoV_device, VtoC_device, M, NbBranch);
 
             APP_GB<<<GridDim1, BlockDim1>>>(Decide_device, CtoV_device, Receivedword_device, Interleaver_device, N, NbBranch);
 
-            ComputeSyndrome<<<GridDim2, BlockDim2>>>(Synd_device, Decide_device, M, NbBranch);
+            ComputeSyndrome<<<GridDim2, BlockDim2, N*sizeof(int)>>>(Synd_device, Decide_device, M, NbBranch,N);
 
             cudaMemcpy(Synd_host, Synd_device, M * sizeof(int), cudaMemcpyDeviceToHost);
 
@@ -443,7 +445,7 @@ int main(int argc, char * argv[]) {
 #ifdef PROFILE  
   gettimeofday(&stop,NULL);  
   diffTime = diff_time_usec(start,stop);  
-  fprintf(stderr,"time for loops in MicroSec: %lu \n",diffTime);
+  fprintf(stderr," %lu \n",diffTime);
 #endif 
 
       printf("%1.5f\t\t", alpha);

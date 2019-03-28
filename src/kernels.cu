@@ -146,8 +146,14 @@ __global__ void DataPassGB_2(int* VtoC, int* CtoV, int* Receivedword, int* Inter
 // This kernel is launched to check if the CtoV copies the same information as VtoC depending upon the signe value
 __global__ void CheckPassGB(int* CtoV, int* VtoC, int M, int NbBranch) {
   
+  	extern __shared__ int vtoc[];
    // calculate the current index on the grid
    unsigned id = threadIdx.x + blockIdx.x * blockDim.x;
+
+
+   for(int k=threadIdx.x; k<NbBranch; k+=blockDim.x){
+	vtoc[k]=VtoC[k];
+   }
 
    if (id < M) {
 
@@ -163,14 +169,14 @@ __global__ void CheckPassGB(int* CtoV, int* VtoC, int M, int NbBranch) {
       for (unsigned stride = 0; stride < strides; stride++) {
 
          node_idx = stride + id * strides;
-         signe ^= VtoC[node_idx];
+         signe ^= vtoc[node_idx];
       }
       
       // 
       for (unsigned stride = 0; stride < strides; stride++) {
          
          node_idx = stride + id * strides;
-         CtoV[node_idx] = signe ^ VtoC[node_idx];
+         CtoV[node_idx] = signe ^ vtoc[node_idx];
       }
    }
 }
@@ -210,24 +216,23 @@ __global__ void APP_GB(int* Decide, int* CtoV, int* Receivedword, int* Interleav
 }
 
 //Here a cumulative decision is made on the variable node error depending upon all the four check nodes to which the variable node is connected to 
-__global__ void ComputeSyndrome(int * Synd, int * Decide, int M, int NbBranch) {
-
+__global__ void ComputeSyndrome(int * Synd, int * Decide, int M, int NbBranch,int N) {
+	extern __shared__ int decide[];
    // calculate the current index on the grid
    unsigned id = threadIdx.x + blockIdx.x * blockDim.x;
 
    // intialize ___ regardless of bounds...
    int synd = 0;
-   
+   for(int k=threadIdx.x; k<N; k+=blockDim.x){
+	decide[k]=Decide[k];
+   }
    if (id < M) {
       
       unsigned strides = (NbBranch / M);
-
+	int i=id * strides;
       // 
       for (unsigned stride = 0; stride < strides; stride++) {
-
-         __syncthreads();
-
-         synd ^=Decide[Mat_device[id * strides + stride]];
+         synd ^=decide[Mat_device[i + stride]];
       }
    }
 
