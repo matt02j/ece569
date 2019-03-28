@@ -159,12 +159,12 @@ int main(int argc, char * argv[]) {
       readRowRanks(rowRanks, M, (matrixAddr + "_RowDegree").c_str());
 
       //alocate and read in test data matrix from local file (also get num_branches while were in this loop)
-      unsigned rank = 0;
+      unsigned cols = 0;
       data_matrix = (unsigned**)malloc(M * sizeof(unsigned*));
       for (unsigned m = 0; m < M; m++) {
-         rank = rowRanks[m];
-         num_branches += rank;
-         data_matrix[m] = (unsigned*) malloc(rank * sizeof(unsigned));
+         cols = rowRanks[m];
+         num_branches += cols;
+         data_matrix[m] = (unsigned*) malloc(cols * sizeof(unsigned));
       }
       readDataMatrix(data_matrix, rowRanks, M, matrixAddr.c_str());
 
@@ -173,7 +173,7 @@ int main(int argc, char * argv[]) {
       histogram(hist, data_matrix, rowRanks, M, N);
 
       // allocate and generate interleaver (allocation done in method)
-      h_interleaver = (unsigned*)malloc(num_branches, sizeof(unsigned));
+      h_interleaver = (unsigned*)malloc(num_branches * sizeof(unsigned));
       initInterleaved(h_interleaver, rowRanks, hist, M, N);
 
       // allocate and unroll host matrix into a flat host vector

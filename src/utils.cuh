@@ -43,9 +43,9 @@ void readRowRanks(unsigned* rowRanks, const unsigned depth, const char* fileName
 void readDataMatrix(unsigned** data_matrix, const unsigned* rowRanks, const unsigned depth, const char* fileName);
 
 // Histogram
-void histogram(unsigned* histogram, const unsigned** data_matrix, const unsigned* rowRanks, const unsigned depth, const unsigned max_val);
+void histogram(unsigned* histogram, unsigned** data_matrix, const unsigned* rowRanks, const unsigned depth, const unsigned max_val);
 
 // unroll the data matrix
-void unrollMatrix(unsigned* unrolledMatrix, const unsigned** data_matrix, const unsigned* rowRanks, const unsigned depth, const unsigned num_branches);
+void unrollMatrix(unsigned* unrolledMatrix, unsigned** data_matrix, const unsigned* rowRanks, const unsigned depth, const unsigned num_branches);
 
 #endif

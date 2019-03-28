@@ -259,7 +259,7 @@ void readDataMatrix(unsigned** data_matrix, const unsigned* rowRanks, const unsi
 }
 
 // Histogram
-void histogram(unsigned* histogram, const unsigned** data_matrix, const unsigned* rowRanks, const unsigned depth, const unsigned max_val){
+void histogram(unsigned* histogram, unsigned** data_matrix, const unsigned* rowRanks, const unsigned depth, const unsigned max_val){
 
       // do histogram
       for (unsigned m = 0; m < depth; m++) {
@@ -270,7 +270,7 @@ void histogram(unsigned* histogram, const unsigned** data_matrix, const unsigned
 }
 
 // unroll the data matrix
-void unrollMatrix(unsigned* unrolledMatrix, const unsigned** data_matrix, const unsigned* rowRanks, const unsigned depth, const unsigned num_branches){
+void unrollMatrix(unsigned* unrolledMatrix, unsigned** data_matrix, const unsigned* rowRanks, const unsigned depth, const unsigned num_branches){
    
    // unroll the memory
    unsigned i = 0;
