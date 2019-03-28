@@ -280,7 +280,8 @@ int main(int argc, char * argv[]) {
    #ifdef PROFILE 
      gettimeofday(&start,NULL);
    #endif 
-         for (unsigned nb = 0, unsigned nbtestedframes = 0; nb < NbMonteCarlo; nb++) {
+         unsigned nbtestedframes = 0;
+         for (unsigned nb = 0; nb < NbMonteCarlo; nb++) {
             
             //
             memset(U,0,rank*sizeof(int));
