@@ -16,7 +16,7 @@
 #include "kernels.cuh"
 
 #ifdef __linux
-__constant__ unsigned Mat_device[5184];
+__constant__ unsigned d_matrix_flat[5184];
 #endif
 
 // Message from channel copied into variable node to check node array.
@@ -229,7 +229,7 @@ __global__ void ComputeSyndrome(int * Synd, int * Decide, unsigned M, unsigned n
 
          __syncthreads();
 
-         synd ^=Decide[Mat_device[id * strides + stride]];
+         synd ^=Decide[d_matrix_flat[id * strides + stride]];
       }
    }
 

@@ -17,7 +17,10 @@
 #include <string>
 #include <iostream>
 #include <fstream>
-// #include <omp.h>
+
+#ifdef OMP
+#include <omp.h>
+#endif
 
 #include "const.cuh"
 #include "utils.cuh"
@@ -63,11 +66,22 @@ deg_file.close();
 */
 
 int main(int argc, char * argv[]) {
-   if(argc > 1){
+
+#ifdef QUIET
+   std::ofstream outFile("results.log");
+   std::cout.rdbuf(outFile.rdbuf());
+#endif
 
 #ifdef VERBOSE
-      std::cout << "Starting." << std::endl << std::endl;
+   std::cout << "Starting." << std::endl << std::endl;
 #endif
+
+   // expect: ./PGaB data_matrix
+   if(argc > 1){
+
+      // read args
+      std::string matrixAddr(argv[1]);    // convert data addr to a string
+
       // --------------------------------------------------------------------------
       // Parameters and memory
       // --------------------------------------------------------------------------
@@ -102,7 +116,7 @@ int main(int argc, char * argv[]) {
       //-------------------------Intermediate data structures-------------------------
       unsigned* rowRanks;        // list of codewords widths
       unsigned** data_matrix;    // matrix of codewords on the host
-      unsigned* unrolledMatrix;  // unrolled matrix
+      unsigned* h_matrix_flat;  // unrolled matrix
       unsigned* hist;            // histogram for <unk>
       int* U;                    // 
       int* Codeword;             // 
@@ -112,22 +126,26 @@ int main(int argc, char * argv[]) {
       
       //------------------------------------Miscellenious Variables------------------------------------
       // srand(time(0) + seed * 31 + 113); // ignore seed, be random
-	  srand(seed * 31 + 113);
+	   srand(seed * 31 + 113);
       unsigned varr = (rand() % 100 >= 80)? 1 : 0;    // stochastic semi-boolean variable, 
                                                       // integer value is used so keep numerical value
-      FILE* f;                            // file IO, tbTerminated 
-      std::string matrixAddr(argv[1]);    // convert data addr to a string
       unsigned num_branches = 0;              // total number of elements in the test data matrix
       unsigned rank;                      // returned from Gaussian Elimination
 
       // Variables for Statistics
+	   unsigned err_total_count;
+	   unsigned bit_error_count;
+	   unsigned missed_error_count;
+	   unsigned err_count;
       int NiterMoy;
       int NiterMax;
       int Dmin;
-      unsigned NbTotalErrors;
-      unsigned NbBitError;
-      unsigned NbUnDetectedErrors;
-      unsigned NbError;
+
+      // Initialize grid and block dimensions
+      dim3 GridDim1((N - 1) / BLOCK_DIM_1 + 1, 1);
+      dim3 BlockDim1(BLOCK_DIM_1);
+      dim3 GridDim2((M - 1) / BLOCK_DIM_2 + 1, 1);
+      dim3 BlockDim2(BLOCK_DIM_2);
 
 #ifdef PROFILE
       // Used for timing CPU
@@ -137,18 +155,8 @@ int main(int argc, char * argv[]) {
 #endif
 
 #ifdef VERBOSE
-      std::cout << "Running preliminary calculations...";
+      std::cout << "Reading in test data...";
 #endif
-
-      //------------------------------------Preliminary Calculations------------------------------------
-      // Before allocating most of the memory, some 
-      // preliminary calculations and file reads must be done
-
-      // Initialize grid and block dimensions
-      dim3 GridDim1((N - 1) / BLOCK_DIM_1 + 1, 1);
-      dim3 BlockDim1(BLOCK_DIM_1);
-      dim3 GridDim2((M - 1) / BLOCK_DIM_2 + 1, 1);
-      dim3 BlockDim2(BLOCK_DIM_2);
 
       // allocate and get row ranks
       rowRanks = (unsigned*) malloc(M * sizeof(unsigned));
@@ -164,27 +172,14 @@ int main(int argc, char * argv[]) {
       }
       readDataMatrix(data_matrix, rowRanks, M, matrixAddr.c_str());
 
-      // allocate and generate histogram on the data
-      hist = (unsigned*)calloc(N, sizeof(unsigned));
-      histogram(hist, data_matrix, rowRanks, M, N);
-
-      // allocate and generate interleaver (allocation done in method)
-      h_interleaver = (unsigned*)malloc(num_branches * sizeof(unsigned));
-      initInterleaved(h_interleaver, data_matrix, rowRanks, hist, M, N);
-
-      // allocate and unroll host matrix into a flat host vector
-      unrolledMatrix = (unsigned*)malloc(num_branches * sizeof(unsigned));
-      unrollMatrix(unrolledMatrix, data_matrix, rowRanks, M, num_branches);
-
-      // free no longer needed structures
-      free(hist);
-
 #ifdef VERBOSE
-      std::cout << "Done." << std::endl;
+	   std::cout << "Done." << std::endl;
 
-      std::cout << "Allocating memory...";
+	   std::cout << "Allocating memory...";
 #endif
       //-------------------------Host Allocations-------------------------
+	   h_matrix_flat = (unsigned*)malloc(num_branches * sizeof(unsigned));
+	   h_interleaver = (unsigned*)malloc(num_branches * sizeof(unsigned));
       h_synd = (int*)calloc(M, sizeof(int));
       h_CtoV = (int*) calloc(num_branches, sizeof(int));
       h_VtoC = (int*) calloc(num_branches, sizeof(int));
@@ -200,6 +195,7 @@ int main(int argc, char * argv[]) {
       cudaMalloc((void**) &d_decide, N * sizeof(int));
 
       //-------------------------Other Allocations-------------------------
+	   hist = (unsigned*)calloc(N, sizeof(unsigned));
       U = (int*)calloc(N, sizeof(int));
       Codeword = (int*)calloc(N, sizeof(int));
 
@@ -218,23 +214,39 @@ int main(int argc, char * argv[]) {
 #ifdef VERBOSE
       std::cout << "Done." << std::endl;
 
-      std::cout << "Running Gaussian Elimination...";
+      std::cout << "Performing preliminary calulations...";
 #endif
-      // -------------------------------------------------------------------
-      // Gaussian Elimination for the Encoding Matrix (Full Representation)
-      // -------------------------------------------------------------------
+
+      // allocate and generate histogram on the data
+      histogram(hist, data_matrix, rowRanks, M, N);
+
+      // allocate and generate interleaver (allocation done in method)
+      initInterleaved(h_interleaver, data_matrix, rowRanks, hist, M, N);
+
+      // allocate and unroll host matrix into a flat host vector
+      unrollMatrix(h_matrix_flat, data_matrix, rowRanks, M, num_branches);
+
+      // free no longer needed structures
+      free(hist);
 
       // uh....
       for (unsigned n = 0; n < N; n++) {
-         PermG[n] = n;
+	      PermG[n] = n;
       }
 
-      // okay...
+      // okay.
       for (unsigned m = 0; m < M; m++) {
-         for (unsigned k = 0; k < rowRanks[m]; k++) {
-            MatFull[m][data_matrix[m][k]] = 1;
-         }
+	      for (unsigned k = 0; k < rowRanks[m]; k++) {
+		      MatFull[m][data_matrix[m][k]] = 1;
+	      }
       }
+
+#ifdef VERBOSE
+      std::cout << "Done." << std::endl;
+
+      std::cout << "Running Gaussian Elimination...";
+#endif-----------------------------------------------------------------
+
       rank = GaussianElimination_MRB(PermG, MatG, MatFull, M, N);
 
       // free no longer needed data structures
@@ -242,41 +254,37 @@ int main(int argc, char * argv[]) {
       free2d(data_matrix, M);
       free(rowRanks);
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-      f = fopen((matrixAddr+"_Res").c_str(), "w");
-      fprintf(f, "-------------------------Gallager B--------------------------------------------------\n");
-      fprintf(f, "alpha\t\tNbEr(BER)\t\tNbFer(FER)\t\tNbtested\t\tIterAver(Itermax)\tNbUndec(Dmin)\n");
-
-      printf("-------------------------Gallager B--------------------------------------------------\n");
-      printf("alpha\t\t\tNbEr(BER)\t\tNbFer(FER)\t\tNbtested\t\tIterAver(Itermax)\t\tNbUndec(Dmin)\n");
-
 #ifdef VERBOSE
       std::cout << "Done." << std::endl;
 
-      std::cout << "Running Gaussian Elimination...";
+      std::cout << "Running Sim." << std::endl << std::endl;
 #endif
+
+      std::cout << "--------------------------------------------------Gallager B--------------------------------------------------" << std::endl;
+      std::cout << "alpha\tNbEr(BER)\t\tNbFer(FER)\tNbtested\tIterAver(Itermax)\tNbUndec(Dmin)" << std::endl;
+
       // loop from alpha max to alpha min
       for (float alpha = alpha_max; alpha >= alpha_min; alpha -= alpha_step) {
 
          NiterMoy = 0;
          NiterMax = 0;
          Dmin = 100000;
-         NbTotalErrors = 0;
-         NbBitError = 0;
-         NbUnDetectedErrors = 0;
-         NbError = 0;
+         err_total_count = 0;
+         bit_error_count = 0;
+         missed_error_count = 0;
+         err_count = 0;
 
          // Copying contents from the host to the device
          cudaMemcpy(d_interleaver, h_interleaver, num_branches * sizeof(int), cudaMemcpyHostToDevice);
-         cudaMemcpyToSymbol(Mat_device, unrolledMatrix, num_branches * sizeof(unsigned));
+         cudaMemcpyToSymbol(d_matrix_flat, h_matrix_flat, num_branches * sizeof(unsigned));
          cudaMemcpy(d_CtoV, h_CtoV, num_branches * sizeof(int), cudaMemcpyHostToDevice);
          cudaMemcpy(d_VtoC, h_VtoC, num_branches * sizeof(int), cudaMemcpyHostToDevice);
 
          // encoding
-   #ifdef PROFILE 
-     gettimeofday(&start,NULL);
-   #endif 
-         unsigned nbtestedframes = 0;
+#ifdef PROFILE 
+		 gettimeofday(&start,NULL);
+#endif 
+         unsigned frames_tested = 0;
          for (unsigned nb = 0; nb < NbMonteCarlo; nb++) {
             
             //
@@ -366,75 +374,69 @@ int main(int argc, char * argv[]) {
             //============================================================================
             // Compute Statistics
             //============================================================================
-            nbtestedframes++;
-            NbError = 0;
+            frames_tested++;
+            err_count = 0;
 
             //
             for (unsigned k = 0; k < N; k++) {
                if (h_decide[k] != Codeword[k]) {
-                  ++NbError;
+                  ++err_count;
                }
             }
 
             // 
-            NbBitError = NbBitError + NbError;
+            bit_error_count = bit_error_count + err_count;
             
             // Case Divergence
             if (!hasConverged) {
                NiterMoy = NiterMoy + itteration_count;
-               NbTotalErrors++;
+               err_total_count++;
             }
 
             // Case Convergence to Right Codeword
-            if ((hasConverged) && (NbError == 0)) {
+            if ((hasConverged) && (err_count == 0)) {
                NiterMax = max(NiterMax, itter + 1);
                NiterMoy = NiterMoy + (itter + 1);
             }
 
             // Case Convergence to Wrong Codeword
-            if ((hasConverged) && (NbError != 0)) {
+            if ((hasConverged) && (err_count != 0)) {
                NiterMax = max(NiterMax, itter + 1);
                NiterMoy = NiterMoy + (itter + 1);
-               NbTotalErrors++;
-               NbUnDetectedErrors++;
-               Dmin = min(Dmin, NbError);
+               err_total_count++;
+               missed_error_count++;
+               Dmin = min(Dmin, err_count);
             }
 
             // Stopping Criterion
-            if (NbTotalErrors == frame_count) {
+            if (err_total_count == frame_count) {
                break;
             }
          }
 
-   #ifdef PROFILE  
-     gettimeofday(&stop,NULL);  
-     diffTime = diff_time_usec(start,stop);  
-     fprintf(stderr,"time for loops in MicroSec: %lu \n",diffTime);
-   #endif 
+#ifdef PROFILE  
+         gettimeofday(&stop,NULL);  
+         diffTime = diff_time_usec(start,stop);  
+         fprintf(stderr,"time for loops in MicroSec: %lu \n",diffTime);
+#endif 
 
-         printf("%1.5f\t\t", alpha);
-         printf("%10d (%1.6f)\t\t", NbBitError, (float) NbBitError / N / nbtestedframes);
-         printf("%4d (%1.6f)\t\t", NbTotalErrors, (float) NbTotalErrors / nbtestedframes);
-         printf("%10d\t\t", nbtestedframes);
-         printf("%1.2f(%d)\t\t", (float) NiterMoy / nbtestedframes, NiterMax);
-         printf("%d(%d)\n", NbUnDetectedErrors, Dmin);
-
-         fprintf(f, "%1.5f\t\t", alpha);
-         fprintf(f, "%10d (%1.8f)\t\t", NbBitError, (float) NbBitError / N / nbtestedframes);
-         fprintf(f, "%4d (%1.8f)\t\t", NbTotalErrors, (float) NbTotalErrors / nbtestedframes);
-         fprintf(f, "%10d\t\t", nbtestedframes);
-         fprintf(f, "%1.2f(%d)\t\t", (float) NiterMoy / nbtestedframes, NiterMax);
-         fprintf(f, "%d(%d)\n", NbUnDetectedErrors, Dmin);
+         std::cout << alpha << "\t";
+         std::cout << bit_error_count << " (" << (float)bit_error_count / N / frames_tested << ")\t";
+         std::cout << err_total_count << " (" << (float)err_total_count / frames_tested << ")\t";
+         std::cout << frames_tested << "\t\t";
+         std::cout << (float)NiterMoy / frames_tested << "(" << NiterMax << ")\t\t\t";
+         std::cout << missed_error_count << "(" << Dmin << ")\t" << std::endl;
+         
+         // TODO go ahead and keep this^ but this data should be sent to a CSV
       }
 
-      //Freeing memory on the GPU
+      // Freeing memory on the GPU
       cudaFree(d_CtoV);
       cudaFree(d_VtoC);
       cudaFree(d_interleaver);
       cudaFree(d_synd);
       cudaFree(d_receivedWord);
       cudaFree(d_decide);
-      fclose(f);
    }
    else{
       fprintf(stderr,"Usage: PGaB /Path/To/Data/File Path/to/output/file");

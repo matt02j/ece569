@@ -17,9 +17,15 @@
 #define CONST_H
 
 // for timing
-// #define PROFILE
+//#define PROFILE
 
-// for printing to console
+//for open mp
+//#define OMP
+
+// Redirect console to file in bin directory
+//#define QUIET
+
+// Print out everything were doing
 #define VERBOSE
 
 #include <cuda.h>

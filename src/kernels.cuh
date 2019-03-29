@@ -19,9 +19,9 @@
 #include "const.cuh"
 
 #ifdef __linux
-extern __constant__ unsigned Mat_device[5184];
+extern __constant__ unsigned d_matrix_flat[5184];
 #else
-__constant__ unsigned Mat_device[5184];
+__constant__ unsigned d_matrix_flat[5184];
 #endif
 
 // Message from channel copied into variable node to check node array.
