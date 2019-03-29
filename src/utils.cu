@@ -16,7 +16,7 @@
 #include "utils.cuh"
 
 // free in 2d (int)
-void free2d(unsigned** mem, const unsigned depth){
+void free2d(unsigned** mem, const unsigned depth) {
 
    for (unsigned i = 0; i < depth; i++) {
       free(mem[i]);
@@ -25,7 +25,7 @@ void free2d(unsigned** mem, const unsigned depth){
 }
 
 // free in 2d (unsigned)
-void free2d(int** mem, const unsigned depth){
+void free2d(int** mem, const unsigned depth) {
 
    for (unsigned i = 0; i < depth; i++) {
       free(mem[i]);
@@ -34,11 +34,11 @@ void free2d(int** mem, const unsigned depth){
 }
 
 // 
-unsigned GaussianElimination_MRB(unsigned* Perm, int** MatOut, int** Mat, unsigned M, unsigned N) {
-   
+unsigned GaussianElimination_MRB(int* Perm, int** MatOut, int** Mat, unsigned M, unsigned N) {
+
    // 
    int buf;
-   
+
    // 
    // used in a for loop with break
    // TODO bad practice, fix for loop if possible
@@ -49,7 +49,7 @@ unsigned GaussianElimination_MRB(unsigned* Perm, int** MatOut, int** Mat, unsign
 
    // 
    int* Index;
-   Index = (int*) calloc(N, sizeof(int));
+   Index = (int*)calloc(N, sizeof(int));
 
    // Triangularization
    int indColumn = 0;
@@ -97,7 +97,7 @@ unsigned GaussianElimination_MRB(unsigned* Perm, int** MatOut, int** Mat, unsign
 
          Perm[m] = indColumn;
       }
-      else { 
+      else {
 
          // else we "mark" the column.
          Index[nb++] = indColumn;
@@ -125,7 +125,7 @@ unsigned GaussianElimination_MRB(unsigned* Perm, int** MatOut, int** Mat, unsign
    // Diagonalization
    for (unsigned m = 0; m < (Rank - 1); m++) {
       for (unsigned n = m + 1; n < Rank; n++) {
-         
+
          //
          if (MatOut[m][n] == 1) {
             for (unsigned k = n; k < N; k++) {
@@ -142,91 +142,91 @@ unsigned GaussianElimination_MRB(unsigned* Perm, int** MatOut, int** Mat, unsign
 
 #ifdef PROFILE
 //
-unsigned long diff_time_usec(struct timeval start, struct timeval stop){
-  unsigned long diffTime;
-  if(stop.tv_usec < start.tv_usec){
-   diffTime = 1000000 + stop.tv_usec-start.tv_usec;
-        diffTime += 1000000 * (stop.tv_sec - 1 - start.tv_sec);
-  }
-  else{
-   diffTime = stop.tv_usec - start.tv_usec;
-        diffTime += 1000000 * (stop.tv_sec - start.tv_sec);
-  }
-  return diffTime;
+unsigned long diff_time_usec(struct timeval start, struct timeval stop) {
+   unsigned long diffTime;
+   if (stop.tv_usec < start.tv_usec) {
+      diffTime = 1000000 + stop.tv_usec - start.tv_usec;
+      diffTime += 1000000 * (stop.tv_sec - 1 - start.tv_sec);
+   }
+   else {
+      diffTime = stop.tv_usec - start.tv_usec;
+      diffTime += 1000000 * (stop.tv_sec - start.tv_sec);
+   }
+   return diffTime;
 }
 #endif
 
 // Initialize the NtoB matrix then unroll it into the interleaved matrix
 // TODO could possibly due with an improvement in the NtoB initialization as the current method seems kinda hacky
 // return num_branches
-void initInterleaved(unsigned* h_interleaver, unsigned** data_matrix, const unsigned* rowRanks, const unsigned* hist, const unsigned depth, const unsigned max_val){
-      
-      /*******
-      * NtoB *
-      *******/
+void initInterleaved(unsigned* h_interleaver, unsigned** data_matrix, const unsigned* rowRanks, const unsigned* hist, const unsigned depth, const unsigned max_val) {
 
-      // temp array the length of max_val in the input matrix
-      unsigned* ind;
-      ind = (unsigned*)calloc(max_val, sizeof(unsigned));
-      
-      // allocate another matrix 
-      // where col width is based on the hist results
-      unsigned** NtoB;
-	  unsigned histy;
-      NtoB = (unsigned**)malloc(max_val * sizeof(unsigned*));
-      for (unsigned i = 0; i < max_val; i++) {
-		 histy = hist[i];
-         NtoB[i] = (unsigned*)malloc(histy * sizeof(unsigned));
+   /*******
+   * NtoB *
+   *******/
+
+   // temp array the length of max_val in the input matrix
+   unsigned* ind;
+   ind = (unsigned*)calloc(max_val, sizeof(unsigned));
+
+   // allocate another matrix 
+   // where col width is based on the hist results
+   unsigned** NtoB;
+   unsigned histy;
+   NtoB = (unsigned**)malloc(max_val * sizeof(unsigned*));
+   for (unsigned i = 0; i < max_val; i++) {
+      histy = hist[i];
+      NtoB[i] = (unsigned*)malloc(histy * sizeof(unsigned));
+   }
+
+   //
+   unsigned col = 0;
+   unsigned branch = 0;
+   unsigned ind_loc = 0;   // local ind
+   for (unsigned i = 0; i < depth; i++) {
+      for (unsigned j = 0; j < rowRanks[i]; j++) {
+
+         // read host matrix element
+         col = data_matrix[i][j];
+
+         // read from the ind, given the host value
+         ind_loc = ind[col];
+
+         // set NtoB element
+         NtoB[col][ind_loc] = branch;
+
+         // increment the local ind and branch counter
+         ind_loc++;
+         branch++;
+
+         // update ind in memory
+         ind[col] = ind_loc;
       }
+   }
 
-      //
-      unsigned col = 0;
-      unsigned branch = 0;
-      unsigned ind_loc = 0;   // local ind
-      for (unsigned i = 0; i < depth; i++) {
-         for (unsigned j = 0; j < rowRanks[i]; j++) {
-            
-            // read host matrix element
-            col = data_matrix[i][j];
+   // dont need this anymore
+   free(ind);
 
-            // read from the ind, given the host value
-            ind_loc = ind[col];
+   /**************
+   * Interleaver *
+   **************/
 
-            // set NtoB element
-            NtoB[col][ind_loc] = branch;
+   // unroll NtoB into interleaver vector
+   unsigned i = 0;
+   for (unsigned n = 0; n < max_val; n++) {
+      for (unsigned k = 0; k < hist[n]; k++) {
 
-            // increment the local ind and branch counter
-            ind_loc++;
-            branch++;
-
-            // update ind in memory
-            ind[col] = ind_loc;
-         }
+         h_interleaver[i] = NtoB[n][k];
+         i++;
       }
+   }
 
-      // dont need this anymore
-      free(ind);
-
-      /**************
-      * Interleaver *
-      **************/
-
-      // unroll NtoB into interleaver vector
-      unsigned i = 0;
-      for (unsigned n = 0; n < max_val; n++) {
-         for (unsigned k = 0; k < hist[n]; k++) {
-            
-            h_interleaver[i] = NtoB[n][k];
-            i++;
-         }
-      }
-
-      // Free NtoB matrix
-      free2d(NtoB, max_val);
+   // Free NtoB matrix
+   free2d(NtoB, max_val);
 }
 
 // read in row rank matrix from local file
-void readRowRanks(unsigned* rowRanks, const unsigned depth, const char* fileName){
+void readRowRanks(unsigned* rowRanks, const unsigned depth, const char* fileName) {
 
    // read from file
    // TODO use streaming, even consider reformatting data vectors to allow one liner read
@@ -239,7 +239,7 @@ void readRowRanks(unsigned* rowRanks, const unsigned depth, const char* fileName
 }
 
 // read in data matrix from local file
-void readDataMatrix(unsigned** data_matrix, const unsigned* rowRanks, const unsigned depth, const char* fileName){
+void readDataMatrix(unsigned** data_matrix, const unsigned* rowRanks, const unsigned depth, const char* fileName) {
 
    // read in from matrix data file to the host matrix in memory
    // TODO use streaming, even consider reformatting data vectors to allow one liner read
@@ -247,26 +247,26 @@ void readDataMatrix(unsigned** data_matrix, const unsigned* rowRanks, const unsi
    f = fopen(fileName, "r");
    for (unsigned m = 0; m < depth; m++) {
       for (unsigned k = 0; k < rowRanks[m]; k++) {
-         fscanf(f, "%d", & data_matrix[m][k]);
+         fscanf(f, "%d", &data_matrix[m][k]);
       }
    }
    fclose(f);
 }
 
 // histogram
-void histogram(unsigned* hist, unsigned** data_matrix, const unsigned* rowRanks, const unsigned depth, const unsigned max_val){
+void histogram(unsigned* hist, unsigned** data_matrix, const unsigned* rowRanks, const unsigned depth, const unsigned max_val) {
 
-      // do hist
-      for (unsigned m = 0; m < depth; m++) {
-         for (unsigned k = 0; k < rowRanks[m]; k++){
-            hist[data_matrix[m][k]]++;
-         }
+   // do hist
+   for (unsigned m = 0; m < depth; m++) {
+      for (unsigned k = 0; k < rowRanks[m]; k++) {
+         hist[data_matrix[m][k]]++;
       }
+   }
 }
 
 // unroll the data matrix
-void unrollMatrix(unsigned* unrolledMatrix, unsigned** data_matrix, const unsigned* rowRanks, const unsigned depth, const unsigned num_branches){
-   
+void unrollMatrix(unsigned* unrolledMatrix, unsigned** data_matrix, const unsigned* rowRanks, const unsigned depth, const unsigned num_branches) {
+
    // unroll the memory
    unsigned i = 0;
    for (unsigned m = 0; m < depth; m++) {
