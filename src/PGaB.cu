@@ -17,6 +17,7 @@
 #include <string>
 #include <iostream>
 #include <fstream>
+#include <random>
 
 #ifdef OMP
 #include <omp.h>
@@ -92,16 +93,21 @@ int main(int argc, char * argv[]) {
       unsigned frame_count = 100;      // Simulation stops when frame_count in error
       unsigned seed = 42;               // Seed Initialization for consistent Simulations
 
+      //----------------------------------Noise Parameters----------------------------------
       // Channel Crossover Probability Max and Min
       float alpha_max = 0.03f; // alpha_max=0.06
       float alpha_min = 0.03f;
       float alpha_step = 0.01f;
 
+      std::random_device rd;                          // boilerplate
+      std::mt19937 e2(rd());                          // boilerplate 
+      std::uniform_real_distribution<> dist(0, 1);    // uni{} (use dist(e2) to generate)
+
       //-------------------------Host memory structures-------------------------
       unsigned* h_interleaver;
       int* h_CtoV;
       int* h_VtoC;
-      int* h_receivedWord;
+      int* h_messageRecieved;
       int* h_decide;
       int* h_synd;
 
@@ -116,18 +122,16 @@ int main(int argc, char * argv[]) {
       //-------------------------Intermediate data structures-------------------------
       unsigned* rowRanks;        // list of codewords widths
       unsigned** data_matrix;    // matrix of codewords on the host
-      unsigned* h_matrix_flat;  // unrolled matrix
+      unsigned* h_matrix_flat;   // unrolled matrix
       unsigned* hist;            // histogram for <unk>
-      int* U;                    // 
-      int* Codeword;             // 
-      int** MatFull;             // 
-      int** MatG;                // 
-      int* PermG;                // 
+      unsigned* bit_stream;           // Randomly generated bit stream 
+      unsigned* message;              // test message {0,1,0,0,1,0,...}
+      int** MatFull;             // ...
+      int** MatG;                // ...
+      unsigned* PermG;                // array to keep track of permutations in MatG 
 
       //------------------------------------Miscellenious Variables------------------------------------
-      // srand(time(0) + seed * 31 + 113); // ignore seed, be random
-      srand(seed * 31 + 113);
-      unsigned varr = (rand() % 100 >= 80) ? 1 : 0;    // stochastic semi-boolean variable, 
+      unsigned varr = (dist(e2) <= 0.2) ? 1 : 0;    // stochastic semi-boolean variable, 
                                                       // integer value is used so keep numerical value
       unsigned num_branches = 0;              // total number of elements in the test data matrix
       unsigned rank;                      // returned from Gaussian Elimination
@@ -137,9 +141,12 @@ int main(int argc, char * argv[]) {
       unsigned bit_error_count;
       unsigned missed_error_count;
       unsigned err_count;
-      int NiterMoy;
-      int NiterMax;
-      int Dmin;
+      unsigned NiterMoy;
+      unsigned NiterMax;
+      unsigned Dmin;
+
+      unsigned itter;         // keep track of itterations run (kernels run)
+      bool hasConverged;      // monitor kernel launches for convergence
 
       // Initialize grid and block dimensions
       dim3 GridDim1((N - 1) / BLOCK_DIM_1 + 1, 1);
@@ -183,7 +190,7 @@ int main(int argc, char * argv[]) {
       h_synd = (int*)calloc(M, sizeof(int));
       h_CtoV = (int*)calloc(num_branches, sizeof(int));
       h_VtoC = (int*)calloc(num_branches, sizeof(int));
-      h_receivedWord = (int*)calloc(N, sizeof(int));
+      h_messageRecieved = (int*)calloc(N, sizeof(int));
       h_decide = (int*)calloc(N, sizeof(int));
 
       //-------------------------Device Allocations-------------------------
@@ -196,8 +203,8 @@ int main(int argc, char * argv[]) {
 
       //-------------------------Other Allocations-------------------------
       hist = (unsigned*)calloc(N, sizeof(unsigned));
-      U = (int*)calloc(N, sizeof(int));
-      Codeword = (int*)calloc(N, sizeof(int));
+      bit_stream = (unsigned*)calloc(N, sizeof(unsigned));
+      message = (unsigned*)calloc(N, sizeof(unsigned));
 
       MatG = (int**)malloc(M * sizeof(int*));
       for (unsigned m = 0; m < M; m++) {
@@ -209,7 +216,7 @@ int main(int argc, char * argv[]) {
          MatFull[m] = (int*)malloc(N * sizeof(int));
       }
 
-      PermG = (int*)malloc(N * sizeof(int));
+      PermG = (unsigned*)malloc(N * sizeof(unsigned));
 
 #ifdef VERBOSE
       std::cout << "Done." << std::endl;
@@ -288,72 +295,75 @@ int main(int argc, char * argv[]) {
          for (unsigned nb = 0; nb < NbMonteCarlo; nb++) {
 
             //
-            memset(U, 0, rank * sizeof(int));
-
+            memset(bit_stream, 0, rank * sizeof(int));
+#ifdef ZERO_CODE
+            // All zero codeword
+            for (n = 0; n < N; n++) {
+               message[n] = 0;
+            }
+#else
             // randomly gerenates a uniform distribution of 0s and 1s
             for (unsigned k = rank; k < N; k++) {
-               U[k] = (int)floor(rand() * 2);
+               bit_stream[k] = (int)floor(dist(e2) * 2);
             }
 
+            // apply organized chaos to bit stream
             // TODO this is what takes ~60% of the whole program
             for (int k = rank - 1; k >= 0; k--) {
                for (unsigned l = k + 1; l < N; l++) {
-                  U[k] = U[k] ^ (MatG[k][l] * U[l]);
+                  bit_stream[k] = bit_stream[k] ^ (MatG[k][l] * bit_stream[l]);
                }
             }
-
-            //
+            
+            // assign altered bit stream codewords array,
+            // based on order determined by the permutation array
             for (unsigned k = 0; k < N; k++) {
-               Codeword[PermG[k]] = U[k];
+               message[PermG[k]] = bit_stream[k];
             }
-
-            // All zero codeword
-            //for (n=0;n<N;n++) { Codeword[n]=0; }
-
-            // Add Noise 
+#endif
+            
+            // Flip the bits with the alpha percentage
             for (unsigned n = 0; n < N; n++) {
-               if (rand() < alpha) {
-                  h_receivedWord[n] = 1 - Codeword[n];
+               if (dist(e2) < alpha) {
+                  h_messageRecieved[n] = 1 - message[n];
                }
                else {
-                  h_receivedWord[n] = Codeword[n];
+                  h_messageRecieved[n] = message[n];
                }
             }
 
-            //============================================================================
-            // Decoder
-            //============================================================================
-
+            //---------------------------------------Decoder---------------------------------------
+            
             //
             memset(h_CtoV, 0, num_branches * sizeof(int));
 
-            //
-            memmove(h_decide, h_receivedWord, N * sizeof(int));
+            // make... a second recieved message vector... for reasons.
+            memmove(h_decide, h_messageRecieved, N * sizeof(int));
 
-            cudaMemcpy(d_receivedWord, h_receivedWord, N * sizeof(int), cudaMemcpyHostToDevice);
+            cudaMemcpy(d_receivedWord, h_messageRecieved, N * sizeof(int), cudaMemcpyHostToDevice);
             cudaMemcpy(d_decide, h_decide, N * sizeof(int), cudaMemcpyHostToDevice);
 
             // loop through each itteraction, and break on convergence
-            unsigned itter = 0;
-            bool hasConverged = false;
+            itter = 0;
+            hasConverged = false;
             while (itter < itteration_count && !hasConverged) {
 
                // Different itterations have different kernels
                if (itter == 0) {
-                  DataPassGB_0 << <GridDim1, BlockDim1 >> > (d_VtoC, d_receivedWord, d_interleaver, N, num_branches);
+                  DataPassGB_0 <<<GridDim1, BlockDim1 >> > (d_VtoC, d_receivedWord, d_interleaver, N, num_branches);
                }
                else if (itter < 15) {
-                  DataPassGB_1 << <GridDim1, BlockDim1 >> > (d_VtoC, d_CtoV, d_receivedWord, d_interleaver, N, num_branches);
+                  DataPassGB_1 <<<GridDim1, BlockDim1 >> > (d_VtoC, d_CtoV, d_receivedWord, d_interleaver, N, num_branches);
                }
                else {
-                  DataPassGB_2 << <GridDim1, BlockDim1 >> > (d_VtoC, d_CtoV, d_receivedWord, d_interleaver, N, num_branches, varr);
+                  DataPassGB_2 <<<GridDim1, BlockDim1 >> > (d_VtoC, d_CtoV, d_receivedWord, d_interleaver, N, num_branches, varr);
                }
 
-               CheckPassGB << <GridDim2, BlockDim2 >> > (d_CtoV, d_VtoC, M, num_branches);
+               CheckPassGB <<<GridDim2, BlockDim2 >> > (d_CtoV, d_VtoC, M, num_branches);
 
-               APP_GB << <GridDim1, BlockDim1 >> > (d_decide, d_CtoV, d_receivedWord, d_interleaver, N, num_branches);
+               APP_GB <<<GridDim1, BlockDim1 >> > (d_decide, d_CtoV, d_receivedWord, d_interleaver, N, num_branches);
 
-               ComputeSyndrome << <GridDim2, BlockDim2 >> > (d_synd, d_decide, M, num_branches);
+               ComputeSyndrome <<<GridDim2, BlockDim2 >> > (d_synd, d_decide, M, num_branches);
 
                cudaMemcpy(h_synd, d_synd, M * sizeof(int), cudaMemcpyDeviceToHost);
 
@@ -379,7 +389,7 @@ int main(int argc, char * argv[]) {
 
             //
             for (unsigned k = 0; k < N; k++) {
-               if (h_decide[k] != Codeword[k]) {
+               if (h_decide[k] != message[k]) {
                   ++err_count;
                }
             }
@@ -393,13 +403,13 @@ int main(int argc, char * argv[]) {
                err_total_count++;
             }
 
-            // Case Convergence to Right Codeword
+            // Case Convergence to Right message
             if ((hasConverged) && (err_count == 0)) {
                NiterMax = max(NiterMax, itter + 1);
                NiterMoy = NiterMoy + (itter + 1);
             }
 
-            // Case Convergence to Wrong Codeword
+            // Case Convergence to Wrong message
             if ((hasConverged) && (err_count != 0)) {
                NiterMax = max(NiterMax, itter + 1);
                NiterMoy = NiterMoy + (itter + 1);

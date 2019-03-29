@@ -29,7 +29,7 @@ void free2d(unsigned** mem, const unsigned depth);
 void free2d(int** mem, const unsigned depth);
 
 // 
-unsigned GaussianElimination_MRB(int* Perm, int** MatOut, int** Mat, unsigned M, unsigned N);
+unsigned GaussianElimination_MRB(unsigned* Perm, int** MatOut, int** Mat, unsigned M, unsigned N);
 
 // 
 unsigned long diff_time_usec(struct timeval start, struct timeval stop);
