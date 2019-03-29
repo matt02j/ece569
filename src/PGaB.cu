@@ -252,7 +252,7 @@ int main(int argc, char * argv[]) {
       std::cout << "Done." << std::endl;
 
       std::cout << "Running Gaussian Elimination...";
-#endif-----------------------------------------------------------------
+#endif
 
       rank = GaussianElimination_MRB(PermG, MatG, MatFull, M, N);
 
