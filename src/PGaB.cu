@@ -232,12 +232,20 @@ int main(int argc, char * argv[]) {
    dim3 BlockDim1(1024);
    dim3 GridDim2((M - 1) / 1024 + 1, 1);
    dim3 BlockDim2(1024);
-
+   dim3 NestedBlock(1024);
+   dim3 NestedGrid(1);
+#ifdef PROFILE 
+  gettimeofday(&start,NULL);
+#endif
    // ----------------------------------------------------
    // Gaussian Elimination for the Encoding Matrix (Full Representation)
    // ----------------------------------------------------
    int ** MatFull, ** MatG, * PermG;
    int rank;
+
+   //Declaring device data 
+   int *U_device;
+   int *MatG_device, *MatG1;
 
    MatG = (int ** ) calloc(M, sizeof(int * ));
    
@@ -265,6 +273,21 @@ int main(int argc, char * argv[]) {
    }
    rank = GaussianElimination_MRB(PermG, MatG, MatFull, M, N);
 
+    //cudaMallocs = Jeremy
+   cudaMalloc((void **) &U_device, N * sizeof(int));
+   cudaMalloc((void **) &MatG_device, M * N * sizeof(int));
+   MatG1=(int*)malloc(M*N*sizeof(int));
+
+   //make continuous in memory for memcpy // if we edit the gausian elimination function we can get rid of this
+   for (m = 0; m < M; m++) {
+      for (n = 0; n < N; n++) {
+         MatG1[m * N + n] = MatG[m][n];
+      }
+   }
+
+   //cpy MatG1 to device only once
+   cudaMemcpyAsync(MatG_device, MatG1, M * N * sizeof(int), cudaMemcpyHostToDevice);
+
    // Variables for Statistics
    int IsCodeword, nb;
    int NiterMoy, NiterMax;
@@ -291,9 +314,7 @@ int main(int argc, char * argv[]) {
       NbUnDetectedErrors = 0;
       NbError = 0;
 
-#ifdef PROFILE 
-  gettimeofday(&start,NULL);
-#endif
+
       // Copying contents from the host to the device
       cudaMemcpy(Interleaver_device, Interleaver_host, NbBranch * sizeof(int), cudaMemcpyHostToDevice);
       cudaMemcpyToSymbol(Mat_device, Mat_host1, NbBranch * sizeof(int));
@@ -314,12 +335,16 @@ int main(int argc, char * argv[]) {
             U[k] = floor(drand48() * 2);
          }
 
-         // TODO this is what takes ~60% of the whole program
-         for (k = rank - 1; k >= 0; k--) {
-            for (l = k + 1; l < N; l++) {
-               U[k] = U[k] ^ (MatG[k][l] * U[l]);
-            }
-         }
+	 //replace that super long loop
+	 cudaMemcpy(U_device, U, N * sizeof(int), cudaMemcpyHostToDevice);
+         NestedFor<<<NestedGrid, NestedBlock>>>(MatG_device, U_device, rank - 1, N);
+         cudaMemcpy(U, U_device, N *sizeof(int), cudaMemcpyDeviceToHost);
+         // TODO this is what takes ~60% of the whole program //obsolete
+         //for (k = rank - 1; k >= 0; k--) {
+         //   for (l = k + 1; l < N; l++) {
+         //      U[k] = U[k] ^ (MatG[k][l] * U[l]);
+         //   }
+         //}
 
          //
          for (k = 0; k < N; k++) {

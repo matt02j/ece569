@@ -239,3 +239,20 @@ __global__ void ComputeSyndrome(int * Synd, int * Decide, int M, int NbBranch,in
    // NOTE write back regardless of thread
    Synd[id]=synd;
 }
+
+__global__ void NestedFor(int* MatG_D, int* U_D, int k, int N){
+   	int id = blockIdx.x*blockDim.x + threadIdx.x;
+	int stride = id*N;
+	for(int i=k+1;i<N;i++){
+		if(id <= k){
+			//  0:k      0:k            0:k     k+1:N    k+1:N
+			U_D[id] = U_D[id] ^ (MatG_D[stride + i] * U_D[i]);
+		}
+	}
+
+	for(int i=k; i>0;i--){
+		if(id < i){
+			U_D[id] = U_D[id] ^ (MatG_D[stride + i] * U_D[i]);
+		}
+	}
+}

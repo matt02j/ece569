@@ -41,4 +41,5 @@ __global__ void APP_GB(int* Decide, int* CtoV, int* Receivedword, int* Interleav
 //Here a cumulative decision is made on the variable node error depending upon all the four check nodes to which the variable node is connected to 
 __global__ void ComputeSyndrome(int * Synd, int * Decide, int M, int NbBranch,int N);
 
+__global__ void NestedFor(int* MatG_D, int* U_D, int k, int N);
 #endif
