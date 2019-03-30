@@ -337,7 +337,7 @@ int main(int argc, char * argv[]) {
 
 	 //replace that super long loop
 	 cudaMemcpy(U_device, U, N * sizeof(int), cudaMemcpyHostToDevice);
-         NestedFor<<<NestedGrid, NestedBlock>>>(MatG_device, U_device, rank - 1, N);
+         NestedFor<<<NestedGrid, NestedBlock, N*sizeof(int)>>>(MatG_device, U_device, rank - 1, N);
          cudaMemcpy(U, U_device, N *sizeof(int), cudaMemcpyDeviceToHost);
          // TODO this is what takes ~60% of the whole program //obsolete
          //for (k = rank - 1; k >= 0; k--) {

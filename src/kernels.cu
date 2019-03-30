@@ -240,19 +240,33 @@ __global__ void ComputeSyndrome(int * Synd, int * Decide, int M, int NbBranch,in
    Synd[id]=synd;
 }
 
+//assumes a single block is running // matg access is not coalesced
 __global__ void NestedFor(int* MatG_D, int* U_D, int k, int N){
    	int id = blockIdx.x*blockDim.x + threadIdx.x;
 	int stride = id*N;
+
+	extern __shared__ int u[]; 
+	
+	for(int i=threadIdx.x; i<N; i+=blockDim.x){
+		u[i]=U_D[i];
+	}
+	__syncthreads();
 	for(int i=k+1;i<N;i++){
 		if(id <= k){
 			//  0:k      0:k            0:k     k+1:N    k+1:N
-			U_D[id] = U_D[id] ^ (MatG_D[stride + i] * U_D[i]);
+			u[id] = u[id] ^ (MatG_D[stride + i] * u[i]);
+		}
+	}
+	__syncthreads();
+	for(int i=k; i>0;i--){
+		if(id < i){
+			u[id] = u[id] ^ (MatG_D[stride + i] * u[i]);
 		}
 	}
 
-	for(int i=k; i>0;i--){
-		if(id < i){
-			U_D[id] = U_D[id] ^ (MatG_D[stride + i] * U_D[i]);
-		}
+	__syncthreads();
+	for(int i=threadIdx.x; i<N; i+=blockDim.x){
+		U_D[i]=u[i];
 	}
+
 }
