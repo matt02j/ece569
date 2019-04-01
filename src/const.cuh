@@ -16,10 +16,32 @@
 #ifndef CONST_H
 #define CONST_H
 
+// for timing
+//#define PROFILE
+
+//for open mp
+//#define OMP
+
+// Redirect console to file in bin directory
+//#define QUIET
+
+// Use all zero codewords
+//#define ZERO_CODE
+
+// Print out everything were doing
+#define VERBOSE
+
 #include <cuda.h>
+
+#ifndef __linux
+#include <cuda_runtime.h>
+#include "device_launch_parameters.h"
+#include "device_functions.h"
+#endif
+
 #include <math.h> 
 #include <stdlib.h>
-#include <unistd.h>
+//#include <unistd.h>
 #include <string.h>
 #include <stdio.h>
 
@@ -33,5 +55,7 @@
 constexpr double PI = 3.1415926536;
 constexpr unsigned M = 648;
 constexpr unsigned N = 1296;
+constexpr unsigned BLOCK_DIM_1 = 1024;
+constexpr unsigned BLOCK_DIM_2 = 1024;
 
 #endif
