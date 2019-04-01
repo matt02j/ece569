@@ -197,7 +197,7 @@ int main(int argc, char * argv[]) {
    // ----------------------------------------------------
    // Decoder
    // ----------------------------------------------------
-   int * CtoV_host, * VtoC_host, * Codeword, * Receivedword_host, * Decide_host, * U, l, kk, * CtoV_device, * VtoC_device, * Receivedword_device, * Decide_device;
+   int * CtoV_host, * VtoC_host, * Codeword, * Receivedword_host, * Decide_host, l, kk, * CtoV_device, * VtoC_device, * Receivedword_device, * Decide_device;
    int iter;
    int * Synd_host, * Synd_device, * Interleaver_device;
    int Synd_host1 = 0;
@@ -210,7 +210,7 @@ int main(int argc, char * argv[]) {
    else {
       varr = 0;
    }
-
+unsigned char *U;
    //Allocating memory for variables on device as well as the host
    cudaMalloc((void ** ) & Synd_device, M * sizeof(int));
    CtoV_host = (int * ) calloc(NbBranch, sizeof(int));
@@ -223,7 +223,7 @@ int main(int argc, char * argv[]) {
    Decide_host = (int * ) calloc(N, sizeof(int));
    cudaMalloc((void ** ) & Decide_device, N * sizeof(int));
    cudaMalloc((void ** ) & Interleaver_device, NbBranch * sizeof(int));
-   U = (int * ) calloc(N, sizeof(int));
+   U = (unsigned char * ) calloc(N, sizeof(unsigned char));
    //srand48(time(0) + Graine * 31 + 113);
    srand48(1);
    //Initializing grid and block dimensions
@@ -244,8 +244,8 @@ int main(int argc, char * argv[]) {
    int rank;
 
    //Declaring device data 
-   int *U_device;
-   int *MatG_device, *MatG1;
+   unsigned char *U_device;
+   unsigned char *MatG_device, *MatG1;
 
    MatG = (int ** ) calloc(M, sizeof(int * ));
    
@@ -274,9 +274,9 @@ int main(int argc, char * argv[]) {
    rank = GaussianElimination_MRB(PermG, MatG, MatFull, M, N);
 
     //cudaMallocs = Jeremy
-   cudaMalloc((void **) &U_device, N * sizeof(int));
-   cudaMalloc((void **) &MatG_device, M * N * sizeof(int));
-   MatG1=(int*)malloc(M*N*sizeof(int));
+   cudaMalloc((void **) &U_device, N * sizeof(unsigned char));
+   cudaMalloc((void **) &MatG_device, M * N * sizeof(unsigned char));
+   MatG1=(unsigned char*)malloc(M*N*sizeof(unsigned char));
 
    //make continuous in memory for memcpy // if we edit the gausian elimination function we can get rid of this
    for (m = 0; m < M; m++) {
@@ -286,7 +286,7 @@ int main(int argc, char * argv[]) {
    }
 
    //cpy MatG1 to device only once
-   cudaMemcpyAsync(MatG_device, MatG1, M * N * sizeof(int), cudaMemcpyHostToDevice);
+   cudaMemcpyAsync(MatG_device, MatG1, M * N * sizeof(unsigned char), cudaMemcpyHostToDevice);
 
    // Variables for Statistics
    int IsCodeword, nb;
@@ -328,7 +328,7 @@ int main(int argc, char * argv[]) {
       for (nb = 0, nbtestedframes = 0; nb < NbMonteCarlo; nb++) {
          
          //
-         memset(U,0,rank*sizeof(int));
+         memset(U,0,rank*sizeof(unsigned char));
          
          // randomly gerenates a uniform distribution of 0s and 1s
          for (k = rank; k < N; k++) {
@@ -336,9 +336,9 @@ int main(int argc, char * argv[]) {
          }
 
 	 //replace that super long loop
-	 cudaMemcpy(U_device, U, N * sizeof(int), cudaMemcpyHostToDevice);
-         NestedFor<<<NestedGrid, NestedBlock, N*sizeof(int)>>>(MatG_device, U_device, rank - 1, N);
-         cudaMemcpy(U, U_device, N *sizeof(int), cudaMemcpyDeviceToHost);
+	 cudaMemcpy(U_device, U, N * sizeof(unsigned char), cudaMemcpyHostToDevice);
+         NestedFor<<<NestedGrid, NestedBlock, N*sizeof(unsigned char)>>>(MatG_device, U_device, rank - 1, N);
+         cudaMemcpy(U, U_device, N *sizeof(unsigned char), cudaMemcpyDeviceToHost);
          // TODO this is what takes ~60% of the whole program //obsolete
          //for (k = rank - 1; k >= 0; k--) {
          //   for (l = k + 1; l < N; l++) {
