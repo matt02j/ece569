@@ -1,3 +1,4 @@
 build/*
 !build/Makefile
 !build/avg.sh
+!build/run.sh

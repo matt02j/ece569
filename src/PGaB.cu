@@ -16,16 +16,16 @@
 
 #include <string>
 #include <iostream>
+#include <fstream>
+#include <random>
 
 #include "const.cuh"
 #include "utils.cuh"
 #include "kernels.cuh"
 
-#define PROFILE
-
 // TODO Verify stride paterns
 // All of the following functions use this
-// for (unsigned stride = 0; stride < (NbBranch / N); stride++)
+// for (unsigned stride = 0; stride < (num_branches / N); stride++)
 // pattern and this seems inherently a little weird that each
 // thread is striding 1, 2, 3, 4... away from itself...
 // 
@@ -54,448 +54,424 @@
 // TODO make sure all allocated memory gets freed at the apropriate time
 
 int main(int argc, char * argv[]) {
-   if(argc < 3 ){
-      fprintf(stderr,"Usage: PGaB /Path/To/Data/File Path/to/output/file");
-   }
 
-   struct timeval start,stop;
-   unsigned long diffTime=0;
+   // need address of compressed data matrix
+   if(argc > 1){
 
-   // 
-   FILE * f;
-
-   // 
-   int Graine;
-
-   unsigned NbIter;
-
-   unsigned nbtestedframes;
-
-   unsigned NBframes;
-
-   // 
-   float alpha_max, alpha_min, alpha_step, alpha, NbMonteCarlo;
-
-   // ----------------------------------------------------
-   // read command line params
-   // ----------------------------------------------------
-   char* FileName;
-   char* FileMatrix;
-   char* FileResult;
-   FileName = (char * ) malloc(200);
-   FileMatrix = (char * ) malloc(200);
-   FileResult = (char * ) malloc(200);
-
-   strcpy(FileMatrix, argv[1]); // Matrix file
-   strcpy(FileResult, argv[2]); // Results file
-   //--------------Simulation input for GaB BF-------------------------
-   NbMonteCarlo = 1000000; // Maximum nb of codewords sent
-   NbIter = 100; // Maximum nb of iterations
-   alpha = 0.01; // Channel probability of error
-   NBframes = 100; // Simulation stops when NBframes in error
-   Graine = 1; // Seed Initialization for Multiple Simulations
-
-   // shortend for testing purposes, was alpha_max=0.06
-   alpha_max = 0.03; //Channel Crossover Probability Max and Min
-   alpha_min = 0.03;
-   alpha_step = 0.01;
-
-   // ----------------------------------------------------
-   // Load Matrix
-   // ----------------------------------------------------
-   int * ColumnDegree, * RowDegree, ** Mat_host, * Mat_host1;
-   int M, N, m, n, k;
-   strcpy(FileName, FileMatrix);
-   strcat(FileName, "_size");
-   f = fopen(FileName, "r");
-   fscanf(f, "%d", & M);
-   fscanf(f, "%d", & N);
-   ColumnDegree = (int * ) calloc(N, sizeof(int));
-   RowDegree = (int * ) calloc(M, sizeof(int));
-   fclose(f);
-   strcpy(FileName, FileMatrix);
-   strcat(FileName, "_RowDegree");
-   f = fopen(FileName, "r");
-
-   for (m = 0; m < M; m++) {
-      fscanf(f, "%d", & RowDegree[m]);
-   }
-   fclose(f);
-
-   Mat_host = (int ** ) calloc(M, sizeof(int * ));
-
-   for (m = 0; m < M; m++) {
-      Mat_host[m] = (int * ) calloc(RowDegree[m], sizeof(int));
-   }
-
-   //changes made
-   strcpy(FileName, FileMatrix);
-
-   f = fopen(FileName, "r");
-   for (m = 0; m < M; m++) {
-      for (k = 0; k < RowDegree[m]; k++) {
-         fscanf(f, "%d", & Mat_host[m][k]);
-      }
-   }
-   fclose(f);
-
-   for (m = 0; m < M; m++) {
-      for (k = 0; k < RowDegree[m]; k++){
-         ColumnDegree[Mat_host[m][k]]++;
-      }
-   }
-   //TODO free filename and filematrix
-   printf("Matrix Loaded \n");
-
-   // ----------------------------------------------------
-   // Build Graph
-   // ----------------------------------------------------
-   int NbBranch, ** NtoB, * Interleaver_host, * ind, numColumn, numBranch;
-   
-   NbBranch = 0;
-   
-   for (m = 0; m < M; m++) {
-      NbBranch = NbBranch + RowDegree[m];
-   }
-   
-   NtoB = (int ** ) calloc(N, sizeof(int * ));
-   
-   for (n = 0; n < N; n++) {
-      NtoB[n] = (int * ) calloc(ColumnDegree[n], sizeof(int));
-   }
-   
-   Interleaver_host = (int * ) calloc(NbBranch, sizeof(int));
-   ind = (int * ) calloc(N, sizeof(int));
-   numBranch = 0;
-   
-   for (m = 0; m < M; m++) {
-      for (k = 0; k < RowDegree[m]; k++) {
-         numColumn = Mat_host[m][k];
-         NtoB[numColumn][ind[numColumn]++] = numBranch++;
-      }
-   }
-
-   free(ind);
-   numBranch = 0;
-
-   for (n = 0; n < N; n++) {
-      for (k = 0; k < ColumnDegree[n]; k++) {
-         Interleaver_host[numBranch++] = NtoB[n][k];
-      }
-   }
-   
-   Mat_host1 = (int * ) calloc(NbBranch, sizeof(int));
-   //TODO this is just a conversion of a 2d matrix into a 1d array, is this necesarry?
-   for (m = 0; m < M; m++) {
-      for (n = 0; n < 8; n++) {
-         Mat_host1[m * 8 + n] = Mat_host[m][n];
-      }
-   }
-
-   printf("Graph Build \n");
-
-   // ----------------------------------------------------
-   // Decoder
-   // ----------------------------------------------------
-   int * CtoV_host, * VtoC_host, * Codeword, * Receivedword_host, * Decide_host, l, kk, * CtoV_device, * VtoC_device, * Receivedword_device, * Decide_device;
-   int iter;
-   int * Synd_host, * Synd_device, * Interleaver_device;
-   int Synd_host1 = 0;
-   Synd_host = (int * ) calloc(M, sizeof(int));
-   int varr;
-   
-   if (rand() % 100 >= 80) {
-      varr = 1;
-   } 
-   else {
-      varr = 0;
-   }
-unsigned char *U;
-   //Allocating memory for variables on device as well as the host
-   cudaMalloc((void ** ) & Synd_device, M * sizeof(int));
-   CtoV_host = (int * ) calloc(NbBranch, sizeof(int));
-   cudaMalloc((void ** ) & CtoV_device, NbBranch * sizeof(int));
-   VtoC_host = (int * ) calloc(NbBranch, sizeof(int));
-   cudaMalloc((void ** ) & VtoC_device, NbBranch * sizeof(int));
-   Codeword = (int * ) calloc(N, sizeof(int));
-   Receivedword_host = (int * ) calloc(N, sizeof(int));
-   cudaMalloc((void ** ) & Receivedword_device, N * sizeof(int));
-   Decide_host = (int * ) calloc(N, sizeof(int));
-   cudaMalloc((void ** ) & Decide_device, N * sizeof(int));
-   cudaMalloc((void ** ) & Interleaver_device, NbBranch * sizeof(int));
-   U = (unsigned char * ) calloc(N, sizeof(unsigned char));
-   //srand48(time(0) + Graine * 31 + 113);
-   srand48(1);
-   //Initializing grid and block dimensions
-
-   dim3 GridDim1((N - 1) / 1024 + 1, 1);
-   dim3 BlockDim1(1024);
-   dim3 GridDim2((M - 1) / 1024 + 1, 1);
-   dim3 BlockDim2(1024);
-   dim3 NestedBlock(1024);
-   dim3 NestedGrid(1);
-#ifdef PROFILE 
-  gettimeofday(&start,NULL);
+#ifdef PROFILE
+      struct timeval start, stop;
+      unsigned long diffTime = 0;
 #endif
-   // ----------------------------------------------------
-   // Gaussian Elimination for the Encoding Matrix (Full Representation)
-   // ----------------------------------------------------
-   int ** MatFull, ** MatG, * PermG;
-   int rank;
 
-   //Declaring device data 
-   unsigned char *U_device;
-   unsigned char *MatG_device, *MatG1;
+#ifdef QUIET
+      std::ofstream outFile("results.log");
+      std::cout.rdbuf(outFile.rdbuf());
+#endif
 
-   MatG = (int ** ) calloc(M, sizeof(int * ));
-   
+#ifdef VERBOSE
+      std::cout << "Starting." << std::endl << std::endl;
+#endif
 
-   for (m = 0; m < M; m++) {
-      MatG[m] = (int * ) calloc(N, sizeof(int));
-   }
-   
-   MatFull = (int ** ) calloc(M, sizeof(int * ));
-   
-   for (m = 0; m < M; m++) {
-      MatFull[m] = (int * ) calloc(N, sizeof(int));
-   }
+      // --------------------------------------------------------------------------
+      // Parameters and memory
+      // --------------------------------------------------------------------------
 
-   PermG = (int * ) calloc(N, sizeof(int));
+      //-------------------------Reading command line arguments-------------------------
+      std::string matrixAddr(argv[1]);    // convert data addr to a string
 
-   for (n = 0; n < N; n++) {
-      PermG[n] = n;
-   }
+      //-------------------------Simulation parameters for PGaB-------------------------
+      unsigned NbMonteCarlo = 1000000; // Maximum number of codewords sent
+      unsigned itteration_count = 100; // Maximum nb of iterations
+      unsigned frames_tested = 0;      // NOTE dont move this
+      unsigned frame_count = 100;      // Simulation stops when frame_count in error
 
-   for (m = 0; m < M; m++) {
-      for (k = 0; k < RowDegree[m]; k++) {
-         MatFull[m][Mat_host[m][k]] = 1;
+      //-------------------------Channels probability for bit-flip-------------------------
+      float alpha = 0.01;        // NOTE leave this here...
+      float alpha_max = 0.03;    // max alpha val
+      float alpha_min = 0.03;    // min alpha value
+      float alpha_step = 0.01;   // step size in alpha for loop
+      
+      //--------------------------------Random Number Generation--------------------------------
+#ifdef TRUERANDOM
+      std::random_device rd;                          // boilerplate
+      std::mt19937 e2(rd());                          // boilerplate 
+#else
+      unsigned seed = 1337;                           // Seed Initialization for consistent Simulations
+      std::mt19937 e2(seed);                          // boilerplate
+
+#endif
+      std::uniform_real_distribution<> dist(0, 1);    // uni{} (use dist(e2) to generate)
+
+      //-------------------------Host memory structures-------------------------
+      unsigned* h_matrix_flat;      // unrolled matrix
+      unsigned* h_interleaver;      // ...
+      int* h_CtoV;                  // ...
+      int* h_VtoC;                  // ...
+      unsigned* h_messageRecieved;  // message after bit-flipping noise is applied
+      unsigned* h_decoded;          // message decoded
+      int* h_synd;                  // ...
+      unsigned char* h_bit_stream;       // Randomly generated bit stream 
+      unsigned** h_MatG;            // ...
+      unsigned char* h_MatG_flat;        // MatG flattened
+
+      //-------------------------Device memory structures-------------------------
+      // unsigned* d_matrix_flat;      // held as global in constant memory
+      unsigned* d_interleaver;      // ...
+      int* d_CtoV;                  // 
+      int* d_VtoC;                  // 
+      unsigned* d_messageRecieved;  // message after bit-flipping noise is applied
+      unsigned* d_decoded;          // message decoded
+      int* d_synd;                  // ...
+      unsigned char* d_bit_stream;       // Randomly generated bit stream 
+      unsigned char* d_MatG;             // MatG flattened
+
+      //-------------------------Intermediate data structures-------------------------
+      unsigned* rowRanks;        // list of codewords widths
+      unsigned** data_matrix;    // matrix of codewords on the host
+      unsigned* hist;            // histogram for <unk>
+      unsigned* message;         // test message {0,1,0,0,1,0,...}
+      unsigned** sparse_matrix;  // uncompressed sparse data matrix
+      unsigned* PermG;           // array to keep track of permutations in h_MatG 
+
+      //-------------------------Block and Grid dimensionality structures-------------------------
+      dim3 GridDim1((N - 1) / BLOCK_DIM_1 + 1, 1);
+      dim3 BlockDim1(BLOCK_DIM_1);
+      dim3 GridDim2((M - 1) / BLOCK_DIM_2 + 1, 1);
+      dim3 BlockDim2(BLOCK_DIM_2);
+      dim3 NestedBlock(1024);
+      dim3 NestedGrid(1);
+
+#ifdef VERBOSE
+      std::cout << "Reading in test data...";
+#endif
+
+      // Basically M*ColWidth but this code allows 
+      // for their to be staggered columns, 
+      // so the calculation is not as simple
+      unsigned num_branches;
+
+      // allocate and get row ranks
+      rowRanks = (unsigned*)malloc(M * sizeof(unsigned));
+      readRowRanks(rowRanks, M, (matrixAddr + "_RowDegree").c_str());
+
+      // alocate and read in test data matrix from local file (also get num_branches while were in this loop)
+      unsigned cols = 0;
+      data_matrix = (unsigned**)malloc(M * sizeof(unsigned*));
+      for (unsigned m = 0; m < M; m++) {
+         cols = rowRanks[m];
+         num_branches += cols;
+         data_matrix[m] = (unsigned*)malloc(cols * sizeof(unsigned));
       }
-   }
-   rank = GaussianElimination_MRB(PermG, MatG, MatFull, M, N);
+      readDataMatrix(data_matrix, rowRanks, M, matrixAddr.c_str());
 
-    //cudaMallocs = Jeremy
-   cudaMalloc((void **) &U_device, N * sizeof(unsigned char));
-   cudaMalloc((void **) &MatG_device, M * N * sizeof(unsigned char));
-   MatG1=(unsigned char*)malloc(M*N*sizeof(unsigned char));
+#ifdef VERBOSE
+      std::cout << "Done." << std::endl;
 
-   //make continuous in memory for memcpy // if we edit the gausian elimination function we can get rid of this
-   for (m = 0; m < M; m++) {
-      for (n = 0; n < N; n++) {
-         MatG1[m * N + n] = MatG[m][n];
+      std::cout << "Allocating memory...";
+#endif
+      //-------------------------Host Allocations-------------------------
+      h_matrix_flat = (unsigned*)malloc(num_branches * sizeof(unsigned));
+      h_interleaver = (unsigned*)malloc(num_branches * sizeof(unsigned));
+      h_synd = (int*)calloc(M, sizeof(int));
+      h_CtoV = (int*)calloc(num_branches, sizeof(int));
+      h_VtoC = (int*)calloc(num_branches, sizeof(int));
+      h_messageRecieved = (unsigned*)calloc(N, sizeof(unsigned));
+      h_decoded = (unsigned*)calloc(N, sizeof(unsigned));
+      h_bit_stream = (unsigned char *)calloc(N, sizeof(unsigned char));
+      h_MatG = (unsigned **)calloc(M, sizeof(unsigned *));
+      for (unsigned m = 0; m < M; m++) {
+         h_MatG[m] = (unsigned *)calloc(N, sizeof(unsigned));
       }
-   }
+      h_MatG_flat = (unsigned char*)malloc(M*N * sizeof(unsigned char));
 
-   //cpy MatG1 to device only once
-   cudaMemcpyAsync(MatG_device, MatG1, M * N * sizeof(unsigned char), cudaMemcpyHostToDevice);
+      //-------------------------Device Allocations-------------------------
+      cudaMalloc((void**)&d_interleaver, num_branches * sizeof(unsigned));
+      cudaMalloc((void**)&d_synd, M * sizeof(int));
+      cudaMalloc((void**)&d_CtoV, num_branches * sizeof(int));
+      cudaMalloc((void**)&d_VtoC, num_branches * sizeof(int));
+      cudaMalloc((void**)&d_messageRecieved, N * sizeof(unsigned));
+      cudaMalloc((void**)&d_decoded, N * sizeof(unsigned));
+      cudaMalloc((void **)&d_bit_stream, N * sizeof(unsigned char));
+      cudaMalloc((void **)&d_MatG, M * N * sizeof(unsigned char));
 
-   // Variables for Statistics
-   int IsCodeword, nb;
-   int NiterMoy, NiterMax;
-   int Dmin;
-   int NbTotalErrors, NbBitError;
-   int NbUnDetectedErrors, NbError;
+      //-------------------------Other Allocations-------------------------
+      hist = (unsigned*)calloc(N, sizeof(unsigned));
+      message = (unsigned *)calloc(N, sizeof(unsigned));
 
-   strcpy(FileName, FileResult);
-   f = fopen(FileName, "w");
-   fprintf(f, "-------------------------Gallager B--------------------------------------------------\n");
-   fprintf(f, "alpha\t\tNbEr(BER)\t\tNbFer(FER)\t\tNbtested\t\tIterAver(Itermax)\tNbUndec(Dmin)\n");
+      sparse_matrix = (unsigned **)calloc(M, sizeof(unsigned *));
+      for (unsigned m = 0; m < M; m++) {
+         sparse_matrix[m] = (unsigned *)calloc(N, sizeof(unsigned));
+      }
 
-   printf("-------------------------Gallager B--------------------------------------------------\n");
-   printf("alpha\t\t\tNbEr(BER)\t\tNbFer(FER)\t\tNbtested\t\tIterAver(Itermax)\t\tNbUndec(Dmin)\n");
-
-   // 
-   for (alpha = alpha_max; alpha >= alpha_min; alpha -= alpha_step) {
-
-      NiterMoy = 0;
-      NiterMax = 0;
-      Dmin = 1e5;
-      NbTotalErrors = 0;
-      NbBitError = 0;
-      NbUnDetectedErrors = 0;
-      NbError = 0;
+      PermG = (unsigned *)calloc(N, sizeof(unsigned));
 
 
-      // Copying contents from the host to the device
-      cudaMemcpy(Interleaver_device, Interleaver_host, NbBranch * sizeof(int), cudaMemcpyHostToDevice);
-      cudaMemcpyToSymbol(Mat_device, Mat_host1, NbBranch * sizeof(int));
+#ifdef VERBOSE
+      std::cout << "Done." << std::endl;
 
-	//these are both all 0s? 
-      cudaMemcpy(CtoV_device, CtoV_host, NbBranch * sizeof(int), cudaMemcpyHostToDevice);
-      cudaMemcpy(VtoC_device, VtoC_host, NbBranch * sizeof(int), cudaMemcpyHostToDevice);
+      std::cout << "Performing preliminary calulations...";
+#endif
 
-      // encoding
- 
-      for (nb = 0, nbtestedframes = 0; nb < NbMonteCarlo; nb++) {
-         
-         //
-         memset(U,0,rank*sizeof(unsigned char));
-         
-         // randomly gerenates a uniform distribution of 0s and 1s
-         for (k = rank; k < N; k++) {
-            U[k] = floor(drand48() * 2);
+      // generate histogram on the data matrix
+      histogram(hist, data_matrix, rowRanks, M, N);
+
+      // generate interleaver
+      initInterleaved(h_interleaver, data_matrix, rowRanks, hist, M, N);
+
+      // unroll host matrix into a flat host vector
+      unrollMatrix(h_matrix_flat, data_matrix, rowRanks, M, num_branches);
+
+      // free no longer needed structures
+      free(hist);
+
+      // init permutation matrix
+      for (unsigned n = 0; n < N; n++) {
+         PermG[n] = n;
+      }
+
+      // convert compressed data matrix to sparse matrix
+      for (unsigned m = 0; m < M; m++) {
+         for (unsigned k = 0; k < rowRanks[m]; k++) {
+            sparse_matrix[m][data_matrix[m][k]] = 1;
          }
+      }
 
-	 //replace that super long loop
-	 cudaMemcpy(U_device, U, N * sizeof(unsigned char), cudaMemcpyHostToDevice);
-         NestedFor<<<NestedGrid, NestedBlock, N*sizeof(unsigned char)>>>(MatG_device, U_device, rank - 1, N);
-         cudaMemcpy(U, U_device, N *sizeof(unsigned char), cudaMemcpyDeviceToHost);
-         // TODO this is what takes ~60% of the whole program //obsolete
-         //for (k = rank - 1; k >= 0; k--) {
-         //   for (l = k + 1; l < N; l++) {
-         //      U[k] = U[k] ^ (MatG[k][l] * U[l]);
-         //   }
-         //}
+#ifdef VERBOSE
+      std::cout << "Done." << std::endl;
 
-         //
-         for (k = 0; k < N; k++) {
-            Codeword[PermG[k]] = U[k];
+      std::cout << "Running Gaussian Elimination...";
+#endif
+#ifdef PROFILE 
+      gettimeofday(&start, NULL);
+#endif
+
+
+      unsigned rank;
+
+      rank = GaussianElimination_MRB(PermG, h_MatG, sparse_matrix, M, N);
+
+      // free no longer needed data structures
+      free2d(sparse_matrix, M);
+      free2d(data_matrix, M);
+      free(rowRanks);
+
+#ifdef VERBOSE
+      std::cout << "Done." << std::endl;
+
+      std::cout << "Running Sim." << std::endl << std::endl;
+#endif
+
+      std::cout << "-------------------------------------------Gallager B-------------------------------------------" << std::endl;
+      std::cout << "alpha\tNbEr(BER)\tNbFer(FER)\tNbtested\tIterAver(Itermax)\tNbUndec(Dmin)" << std::endl;
+
+      // Variables for monitoring statistics
+      unsigned err_total_count;
+      unsigned bit_error_count;
+      unsigned missed_error_count;
+      unsigned err_count;
+      unsigned NiterMoy;
+      unsigned NiterMax;
+      unsigned Dmin;
+
+      // add stochastic element to itteratcions past 16
+      unsigned varr = (dist(e2) <= 20) ? 1 : 0;
+
+      // Flatten for memcpy // if we edit the gausian elimination function we can get rid of this
+      for (unsigned m = 0; m < M; m++) {
+         for (unsigned n = 0; n < N; n++) {
+            h_MatG_flat[m * N + n] = (unsigned char)h_MatG[m][n];
          }
-         
-         // All zero codeword
-         //for (n=0;n<N;n++) { Codeword[n]=0; }
+      }
 
-         // Add Noise 
-         for (n = 0; n < N; n++){
-            if (drand48() < alpha){
-               Receivedword_host[n] = 1 - Codeword[n];
-            } 
-            else {
-               Receivedword_host[n] = Codeword[n];
+
+      // copy h_MatG_flat to device only once
+      cudaMemcpyAsync(d_MatG, h_MatG_flat, M * N * sizeof(unsigned char), cudaMemcpyHostToDevice);
+
+      // loop from alpha max to alpha min (increasing noise)
+      for (alpha = alpha_max; alpha >= alpha_min; alpha -= alpha_step) {
+
+         NiterMoy = 0;
+         NiterMax = 0;
+         Dmin = 1e5;
+         err_total_count = 0;
+         bit_error_count = 0;
+         missed_error_count = 0;
+         err_count = 0;
+
+         // Copying contents from the host to the device
+         cudaMemcpy(d_interleaver, h_interleaver, num_branches * sizeof(unsigned), cudaMemcpyHostToDevice);
+         cudaMemcpyToSymbol(d_matrix_flat, h_matrix_flat, num_branches * sizeof(unsigned));
+
+         //these are both all 0s? 
+         cudaMemcpy(d_CtoV, h_CtoV, num_branches * sizeof(int), cudaMemcpyHostToDevice);
+         cudaMemcpy(d_VtoC, h_VtoC, num_branches * sizeof(int), cudaMemcpyHostToDevice);
+
+         frames_tested = 0;
+         unsigned nb = 0;
+         while (nb < NbMonteCarlo && err_total_count != frame_count) {
+
+            //--------------------------------------------Encode--------------------------------------------
+#ifdef ZERO_CODE
+            // All zero codeword
+            for (n = 0; n < N; n++) {
+               message[n] = 0;
             }
-         }
+#else
+            //
+            memset(h_bit_stream, 0, rank * sizeof(unsigned char));
 
-         //============================================================================
-         // Decoder
-         //============================================================================
-         
-         //
-         //memset(CtoV_host,0,NbBranch*sizeof(int));
-
-         //
-         memmove(Decide_host,Receivedword_host,N*sizeof(int));
-
-         cudaMemcpy(Receivedword_device, Receivedword_host, N * sizeof(int), cudaMemcpyHostToDevice);
-         cudaMemcpy(Decide_device, Decide_host, N * sizeof(int), cudaMemcpyHostToDevice);
-
-         for (iter = 0; iter < NbIter; iter++) {
-            
-            // Different itterations have different kernels
-            if (iter == 0) {
-               DataPassGB_0<<<GridDim1, BlockDim1>>>(VtoC_device, Receivedword_device, Interleaver_device, N, NbBranch);
-            }
-            else if (iter < 15) {
-               DataPassGB_1<<<GridDim1, BlockDim1>>>(VtoC_device, CtoV_device, Receivedword_device, Interleaver_device, N, NbBranch);
-            }
-            else {
-               DataPassGB_2<<<GridDim1, BlockDim1>>>(VtoC_device, CtoV_device, Receivedword_device, Interleaver_device, N, NbBranch, varr);
+            // randomly gerenates a uniform distribution of 0s and 1s
+            for (unsigned k = rank; k < N; k++) {
+               h_bit_stream[k] = (unsigned char)floor(dist(e2) * 2);
             }
 
-            CheckPassGB<<<GridDim2, BlockDim2, NbBranch*sizeof(int)>>>(CtoV_device, VtoC_device, M, NbBranch);
 
-            APP_GB<<<GridDim1, BlockDim1>>>(Decide_device, CtoV_device, Receivedword_device, Interleaver_device, N, NbBranch);
+            //replace that super long loop
+            cudaMemcpy(d_bit_stream, h_bit_stream, N * sizeof(unsigned char), cudaMemcpyHostToDevice);
+            NestedFor <<<NestedGrid, NestedBlock, N * sizeof(unsigned char) >>>(d_MatG, d_bit_stream, rank - 1, N);
+            cudaMemcpy(h_bit_stream, d_bit_stream, N * sizeof(unsigned char), cudaMemcpyDeviceToHost);
+            // TODO this is what takes ~60% of the whole program //obsolete
+            //for (k = rank - 1; k >= 0; k--) {
+            //   for (l = k + 1; l < N; l++) {
+            //      h_bit_stream[k] = h_bit_stream[k] ^ (h_MatG[k][l] * h_bit_stream[l]);
+            //   }
+            //}
 
-            ComputeSyndrome<<<GridDim2, BlockDim2, N*sizeof(int)>>>(Synd_device, Decide_device, M, NbBranch,N);
+            //
+            for (unsigned k = 0; k < N; k++) {
+               message[PermG[k]] = (int)h_bit_stream[k];
+            }
+#endif
+            //---------------------------------------Simulate Channel---------------------------------------
 
-            cudaMemcpy(Synd_host, Synd_device, M * sizeof(int), cudaMemcpyDeviceToHost);
-
-            // 
-            int count1 = 0;
-            for (kk = 0; kk < M; kk++) {
-               if (Synd_host[kk] == 1) {
-                  count1++;
-                  break;
+            // Flip the bits with the alpha percentage (noise over channel)
+            for (unsigned n = 0; n < N; n++) {
+               if (dist(e2) < alpha) {
+                  h_messageRecieved[n] = 1 - message[n];
+               }
+               else {
+                  h_messageRecieved[n] = message[n];
                }
             }
 
-            // 
-            if (count1 > 0) {
-               Synd_host1 = 0;
-            }           
-            else {
-               Synd_host1 = 1;
+            //-----------------------------------------------Decode-----------------------------------------------
+            
+            //
+            memmove(h_decoded, h_messageRecieved, N * sizeof(unsigned));
+
+            cudaMemcpy(d_messageRecieved, h_messageRecieved, N * sizeof(unsigned), cudaMemcpyHostToDevice);
+            cudaMemcpy(d_decoded, h_decoded, N * sizeof(unsigned), cudaMemcpyHostToDevice);
+
+            unsigned itter = 0;
+            bool hasConverged = false;
+            while (itter < itteration_count && !hasConverged) {
+
+               // Different itterations have different kernels
+               if (itter == 0) {
+                  DataPassGB_0 << <GridDim1, BlockDim1 >> > (d_VtoC, d_messageRecieved, d_interleaver, N, num_branches);
+               }
+               else if (itter < 15) {
+                  DataPassGB_1 << <GridDim1, BlockDim1 >> > (d_VtoC, d_CtoV, d_messageRecieved, d_interleaver, N, num_branches);
+               }
+               else {
+                  DataPassGB_2 << <GridDim1, BlockDim1 >> > (d_VtoC, d_CtoV, d_messageRecieved, d_interleaver, N, num_branches, varr);
+               }
+
+               CheckPassGB << <GridDim2, BlockDim2, num_branches * sizeof(int) >> > (d_CtoV, d_VtoC, M, num_branches);
+
+               APP_GB << <GridDim1, BlockDim1 >> > (d_decoded, d_CtoV, d_messageRecieved, d_interleaver, N, num_branches);
+
+               ComputeSyndrome << <GridDim2, BlockDim2, N * sizeof(int) >> > (d_synd, d_decoded, M, num_branches, N);
+
+               cudaMemcpy(h_synd, d_synd, M * sizeof(int), cudaMemcpyDeviceToHost);
+
+               // 
+               int count1 = 0;
+               for (unsigned kk = 0; kk < M; kk++) {
+                  if (h_synd[kk] == 1) {
+                     count1++;
+                     break;
+                  }
+               }
+
+               // check for convergence
+               hasConverged = true;
+               for (unsigned kk = 0; kk < M; kk++) {
+                  if (h_synd[kk] == 1) {
+                     hasConverged = false;
+                     break;
+                  }
+               }
+
+               itter++;
             }
 
-            // if (IsCodeword) algorithm has converged and we are done, exit the loop
-            IsCodeword = Synd_host1;
-            if (IsCodeword) {
-               break;
+            cudaMemcpy(h_decoded, d_decoded, N * sizeof(unsigned), cudaMemcpyDeviceToHost);
+
+            //============================================================================
+            // Compute Statistics
+            //============================================================================
+            frames_tested++;
+            err_count = 0;
+
+            // Calculate bit errors
+            for (unsigned k = 0; k < N; k++) {
+               if (h_decoded[k] != message[k]) {
+                  err_count++;
+               }
             }
-         }
+            bit_error_count += err_count;
 
-         cudaMemcpy(Decide_host, Decide_device, N * sizeof(int), cudaMemcpyDeviceToHost);
-
-         //============================================================================
-         // Compute Statistics
-         //============================================================================
-         nbtestedframes++;
-         NbError = 0;
-
-         //
-         for (k = 0; k < N; k++) {
-            if (Decide_host[k] != Codeword[k]) {
-               ++NbError;
+            // Case Divergence
+            if (!hasConverged) {
+               NiterMoy = NiterMoy + itteration_count;
+               err_total_count++;
             }
-         }
 
-         // 
-         NbBitError = NbBitError + NbError;
-         
-         // Case Divergence
-         if (!IsCodeword) {
-            NiterMoy = NiterMoy + NbIter;
-            NbTotalErrors++;
-         }
+            // Case Convergence to Right message
+            if ((hasConverged) && (err_count == 0)) {
+               NiterMax = max(NiterMax, itter + 1);
+               NiterMoy = NiterMoy + (itter + 1);
+            }
 
-         // Case Convergence to Right Codeword
-         if ((IsCodeword) && (NbError == 0)) {
-            NiterMax = max(NiterMax, iter + 1);
-            NiterMoy = NiterMoy + (iter + 1);
-         }
+            // Case Convergence to Wrong message
+            if ((hasConverged) && (err_count != 0)) {
+               NiterMax = max(NiterMax, itter + 1);
+               NiterMoy = NiterMoy + (itter + 1);
+               err_total_count++;
+               missed_error_count++;
+               Dmin = min(Dmin, err_count);
+            }
 
-         // Case Convergence to Wrong Codeword
-         if ((IsCodeword) && (NbError != 0)) {
-            NiterMax = max(NiterMax, iter + 1);
-            NiterMoy = NiterMoy + (iter + 1);
-            NbTotalErrors++;
-            NbUnDetectedErrors++;
-            Dmin = min(Dmin, NbError);
+            nb++;
          }
-
-         // Stopping Criterion
-         if (NbTotalErrors == NBframes) {
-            break;
-         }
-      }
 
 #ifdef PROFILE  
-  gettimeofday(&stop,NULL);  
-  diffTime = diff_time_usec(start,stop);  
-  fprintf(stderr," %lu \n",diffTime);
+         gettimeofday(&stop, NULL);
+         diffTime = diff_time_usec(start, stop);
+         fprintf(stderr, " %lu \n", diffTime);
 #endif 
 
-      printf("%1.5f\t\t", alpha);
-      printf("%10d (%1.6f)\t\t", NbBitError, (float) NbBitError / N / nbtestedframes);
-      printf("%4d (%1.6f)\t\t", NbTotalErrors, (float) NbTotalErrors / nbtestedframes);
-      printf("%10d\t\t", nbtestedframes);
-      printf("%1.2f(%d)\t\t", (float) NiterMoy / nbtestedframes, NiterMax);
-      printf("%d(%d)\n", NbUnDetectedErrors, Dmin);
+         std::cout << alpha << "\t";
+         std::cout << bit_error_count << "(" << (float)bit_error_count / N / frames_tested << ")  ";
+         std::cout << err_total_count << "(" << (float)err_total_count / frames_tested << ")\t";
+         std::cout << frames_tested << "\t\t";
+         std::cout << (float)NiterMoy / frames_tested << "(" << NiterMax << ")\t\t";
+         std::cout << missed_error_count << "(" << Dmin << ")\t" << std::endl;
 
-      fprintf(f, "%1.5f\t\t", alpha);
-      fprintf(f, "%10d (%1.8f)\t\t", NbBitError, (float) NbBitError / N / nbtestedframes);
-      fprintf(f, "%4d (%1.8f)\t\t", NbTotalErrors, (float) NbTotalErrors / nbtestedframes);
-      fprintf(f, "%10d\t\t", nbtestedframes);
-      fprintf(f, "%1.2f(%d)\t\t", (float) NiterMoy / nbtestedframes, NiterMax);
-      fprintf(f, "%d(%d)\n", NbUnDetectedErrors, Dmin);
+      }
+
+      //Freeing memory on the GPU
+      cudaFree(d_CtoV);
+      cudaFree(d_VtoC);
+      cudaFree(d_interleaver);
+      cudaFree(d_synd);
+      cudaFree(d_messageRecieved);
+      cudaFree(d_decoded);
    }
-
-   //Freeing memory on the GPU
-   cudaFree(CtoV_device);
-   cudaFree(VtoC_device);
-   cudaFree(Interleaver_device);
-   cudaFree(Synd_device);
-   cudaFree(Receivedword_device);
-   cudaFree(Decide_device);
-   fclose(f);
+   else {
+      fprintf(stderr, "Usage: PGaB /Path/To/Data/File");
+   }
 
    return 0;
 }
