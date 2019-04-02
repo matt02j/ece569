@@ -112,8 +112,7 @@ int main(int argc, char * argv[]) {
       int* h_synd;                  // ...
       unsigned char* h_bit_stream;       // Randomly generated bit stream 
       unsigned** h_MatG;            // ...
-      unsigned char* h_MatG_flat;        // MatG flattened
-      unsigned int *hp_Bins;        // pinned
+      unsigned char* h_MatG_flat;        // MatG flattened    
       unsigned bin_size = 0;
 
       //-------------------------Device memory structures-------------------------
@@ -131,7 +130,7 @@ int main(int argc, char * argv[]) {
       //-------------------------Intermediate data structures-------------------------
       unsigned* rowRanks;        // list of codewords widths
       unsigned** data_matrix;    // matrix of codewords on the host
-      unsigned* hist;            // histogram for <unk>
+      unsigned* hist;            // histogram for <unk> // pinned
       unsigned* message;         // test message {0,1,0,0,1,0,...}
       unsigned** sparse_matrix;  // uncompressed sparse data matrix
       unsigned* PermG;           // array to keep track of permutations in h_MatG 
@@ -197,14 +196,11 @@ int main(int argc, char * argv[]) {
       cudaMalloc((void **)&d_bit_stream, N * sizeof(unsigned char));
       cudaMalloc((void **)&d_MatG, M * N * sizeof(unsigned char));
       bin_size = sizeof(unsigned) * N;
-      cudaMallocHost((void**)&hp_Bins, bin_size); // host pinned
+      cudaMallocHost((void**)&hist, bin_size); // host pinned
       cudaMalloc((void**) &d_Bins, bin_size);
 
       //-------------------------Other Allocations-------------------------
-      hist = (unsigned *)calloc(N, sizeof(unsigned));
 
-
-      
       message = (unsigned *)calloc(N, sizeof(unsigned));
 
       sparse_matrix = (unsigned **)calloc(M, sizeof(unsigned *));
@@ -229,17 +225,9 @@ int main(int argc, char * argv[]) {
       cudaMemcpyToSymbol(d_matrix_flat, h_matrix_flat, num_branches * sizeof(unsigned));
 
       // generate histogram on the data matrix
-      histogram(hist, data_matrix, rowRanks, M, N);
 
       histogram_private_kernel<<<GridDim1, BlockDim1,N * sizeof(unsigned int)>>>(d_Bins, num_branches, N);
-      cudaMemcpy(hp_Bins, d_Bins, bin_size, cudaMemcpyDeviceToHost);
-      //memcpy(hist, hp_Bins, bin_size);
-
-      for(int c = 0; c < N; c++){
-         if(hist[c] != hp_Bins[c]){
-            printf("error at %d\n", c);
-         }
-      }
+      cudaMemcpy(hist, d_Bins, bin_size, cudaMemcpyDeviceToHost);
 
       // generate interleaver
       initInterleaved(h_interleaver, data_matrix, rowRanks, hist, M, N);
@@ -247,7 +235,7 @@ int main(int argc, char * argv[]) {
 
 
       // free no longer needed structures
-      free(hist);
+      cudaFree(hist);
 
       // init permutation matrix
       for (unsigned n = 0; n < N; n++) {
@@ -489,6 +477,7 @@ int main(int argc, char * argv[]) {
       cudaFree(d_synd);
       cudaFree(d_messageRecieved);
       cudaFree(d_decoded);
+      cudaFree(d_Bins);
    }
    else {
       fprintf(stderr, "Usage: PGaB /Path/To/Data/File");
