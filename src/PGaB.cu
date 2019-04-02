@@ -113,6 +113,8 @@ int main(int argc, char * argv[]) {
       unsigned char* h_bit_stream;       // Randomly generated bit stream 
       unsigned** h_MatG;            // ...
       unsigned char* h_MatG_flat;        // MatG flattened
+      unsigned int *hp_Bins;        // pinned
+      unsigned bin_size = 0;
 
       //-------------------------Device memory structures-------------------------
       // unsigned* d_matrix_flat;      // held as global in constant memory
@@ -124,6 +126,7 @@ int main(int argc, char * argv[]) {
       int* d_synd;                  // ...
       unsigned char* d_bit_stream;       // Randomly generated bit stream 
       unsigned char* d_MatG;             // MatG flattened
+      unsigned int *d_Bins;
 
       //-------------------------Intermediate data structures-------------------------
       unsigned* rowRanks;        // list of codewords widths
@@ -193,9 +196,15 @@ int main(int argc, char * argv[]) {
       cudaMalloc((void**)&d_decoded, N * sizeof(unsigned));
       cudaMalloc((void **)&d_bit_stream, N * sizeof(unsigned char));
       cudaMalloc((void **)&d_MatG, M * N * sizeof(unsigned char));
+      bin_size = sizeof(unsigned) * N;
+      cudaMallocHost((void**)&hp_Bins, bin_size); // host pinned
+      cudaMalloc((void**) &d_Bins, bin_size);
 
       //-------------------------Other Allocations-------------------------
-      hist = (unsigned*)calloc(N, sizeof(unsigned));
+      hist = (unsigned *)calloc(N, sizeof(unsigned));
+
+
+      
       message = (unsigned *)calloc(N, sizeof(unsigned));
 
       sparse_matrix = (unsigned **)calloc(M, sizeof(unsigned *));
@@ -212,14 +221,30 @@ int main(int argc, char * argv[]) {
       std::cout << "Performing preliminary calulations...";
 #endif
 
+      // unroll host matrix into a flat host vector
+      unrollMatrix(h_matrix_flat, data_matrix, rowRanks, M, num_branches);
+
+      // Copying contents from the host to the device
+
+      cudaMemcpyToSymbol(d_matrix_flat, h_matrix_flat, num_branches * sizeof(unsigned));
+
       // generate histogram on the data matrix
       histogram(hist, data_matrix, rowRanks, M, N);
 
+      histogram_private_kernel<<<GridDim1, BlockDim1,N * sizeof(unsigned int)>>>(d_Bins, num_branches, N);
+      cudaMemcpy(hp_Bins, d_Bins, bin_size, cudaMemcpyDeviceToHost);
+      //memcpy(hist, hp_Bins, bin_size);
+
+      for(int c = 0; c < N; c++){
+         if(hist[c] != hp_Bins[c]){
+            printf("error at %d\n", c);
+         }
+      }
+
       // generate interleaver
       initInterleaved(h_interleaver, data_matrix, rowRanks, hist, M, N);
+      cudaMemcpy(d_interleaver, h_interleaver, num_branches * sizeof(unsigned), cudaMemcpyHostToDevice);
 
-      // unroll host matrix into a flat host vector
-      unrollMatrix(h_matrix_flat, data_matrix, rowRanks, M, num_branches);
 
       // free no longer needed structures
       free(hist);
@@ -297,10 +322,6 @@ int main(int argc, char * argv[]) {
          bit_error_count = 0;
          missed_error_count = 0;
          err_count = 0;
-
-         // Copying contents from the host to the device
-         cudaMemcpy(d_interleaver, h_interleaver, num_branches * sizeof(unsigned), cudaMemcpyHostToDevice);
-         cudaMemcpyToSymbol(d_matrix_flat, h_matrix_flat, num_branches * sizeof(unsigned));
 
          //these are both all 0s? 
          cudaMemcpy(d_CtoV, h_CtoV, num_branches * sizeof(int), cudaMemcpyHostToDevice);
