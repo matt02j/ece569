@@ -339,14 +339,7 @@ int main(int argc, char * argv[]) {
             cudaMemcpy(d_bit_stream, h_bit_stream, N * sizeof(unsigned char), cudaMemcpyHostToDevice);
             NestedFor <<<NestedGrid, NestedBlock, N * sizeof(unsigned char) >>>(d_MatG, d_bit_stream, rank - 1, N);
             cudaMemcpy(h_bit_stream, d_bit_stream, N * sizeof(unsigned char), cudaMemcpyDeviceToHost);
-            // TODO this is what takes ~60% of the whole program //obsolete
-            //for (k = rank - 1; k >= 0; k--) {
-            //   for (l = k + 1; l < N; l++) {
-            //      h_bit_stream[k] = h_bit_stream[k] ^ (h_MatG[k][l] * h_bit_stream[l]);
-            //   }
-            //}
-
-            //
+            
             for (unsigned k = 0; k < N; k++) {
                message[PermG[k]] = (int)h_bit_stream[k];
             }
