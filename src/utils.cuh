@@ -23,7 +23,7 @@
 #endif
 
 //cuda check
-inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort = true);
+inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort);
 
 // free in 2d (int)
 void free2d(unsigned** mem, const unsigned depth);
