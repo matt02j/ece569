@@ -276,7 +276,7 @@ __global__ void NestedFor(unsigned char* MatG_D, unsigned char* U_D, unsigned k,
 
 }
 
-__global__ void histogram_private_kernel(unsigned *input, unsigned *bins, unsigned num_elements, unsigned num_bins){
+__global__ void histogram_private_kernel(unsigned *bins, unsigned num_elements, unsigned num_bins){
    
    // Shared memory boxes
 	extern __shared__ unsigned int boxs[];
@@ -290,7 +290,7 @@ __global__ void histogram_private_kernel(unsigned *input, unsigned *bins, unsign
    unsigned i = myId;
 
    // Initialize the gloabal bins to 0
-   while(i < NUM_BINS){
+   while(i < num_bins){
       bins[i] = 0;
       i+=grid_size;
    }
@@ -310,7 +310,7 @@ __global__ void histogram_private_kernel(unsigned *input, unsigned *bins, unsign
 
       // for each of the elements strided by grid size
 		while(i < num_elements){
-			atomicAdd( &(boxs[input[i]]),1);
+			atomicAdd( &(boxs[d_matrix_flat[i]]),1);
 			i+=grid_size;
 		}   
 	}

@@ -48,6 +48,6 @@ __global__ void ComputeSyndrome(int * Synd, unsigned * Decide, unsigned M, unsig
 
 __global__ void NestedFor(unsigned char* MatG_D, unsigned char* U_D, unsigned k, unsigned N);
 
-__global__ void histogram_private_kernel(unsigned *input, unsigned *bins, unsigned num_elements, unsigned num_bins);
+__global__ void histogram_private_kernel(unsigned *bins, unsigned num_elements, unsigned num_bins);
 
 #endif
