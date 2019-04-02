@@ -275,3 +275,49 @@ __global__ void NestedFor(unsigned char* MatG_D, unsigned char* U_D, unsigned k,
 	}
 
 }
+
+__global__ void histogram_private_kernel(unsigned *input, unsigned *bins, unsigned num_elements, unsigned num_bins){
+   
+   // Shared memory boxes
+	extern __shared__ unsigned int boxs[];
+
+   // size of grid
+   unsigned grid_size = blockDim.x*gridDim.x;
+
+   // Position in grid
+   int myId = threadIdx.x + blockIdx.x*blockDim.x;
+
+   unsigned i = myId;
+
+   // Initialize the gloabal bins to 0
+   while(i < NUM_BINS){
+      bins[i] = 0;
+      i+=grid_size;
+   }
+   __syncthreads();
+
+   // Init shared bins using blocks
+   for(int j=threadIdx.x; j<num_bins;j+=blockDim.x){
+      boxs[j]=0;
+   }
+   __syncthreads();
+
+   // reinitialize the index
+   i = myId;
+
+   // execute if we are within the input array
+	if(i < num_elements){
+
+      // for each of the elements strided by grid size
+		while(i < num_elements){
+			atomicAdd( &(boxs[input[i]]),1);
+			i+=grid_size;
+		}   
+	}
+   __syncthreads();
+
+   // Write back to global
+   for(int j=threadIdx.x; j<num_bins; j+=blockDim.x){
+      atomicAdd(&(bins[j]), boxs[j]);
+   }
+}
