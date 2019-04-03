@@ -108,8 +108,8 @@ int main(int argc, char * argv[]) {
       int* h_CtoV;                  // ...
       int* h_VtoC;                  // ...
       unsigned* h_messageRecieved;  // message after bit-flipping noise is applied
-      unsigned* h_decoded;          // message decoded
-      int* h_synd;                  // ...
+      unsigned char* h_decoded;          // message decoded
+      unsigned char* h_synd;                  // ...
       unsigned char* h_bit_stream;       // Randomly generated bit stream 
       unsigned** h_MatG;            // ...
       unsigned char* h_MatG_flat;        // MatG flattened    
@@ -121,8 +121,8 @@ int main(int argc, char * argv[]) {
       int* d_CtoV;                  // 
       int* d_VtoC;                  // 
       unsigned* d_messageRecieved;  // message after bit-flipping noise is applied
-      unsigned* d_decoded;          // message decoded
-      int* d_synd;                  // ...
+      unsigned char* d_decoded;          // message decoded
+      unsigned char* d_synd;                  // ...
       unsigned char* d_bit_stream;       // Randomly generated bit stream 
       unsigned char* d_MatG;             // MatG flattened
       unsigned int *d_Bins;
@@ -171,14 +171,17 @@ int main(int argc, char * argv[]) {
 
       std::cout << "Allocating memory...";
 #endif
+#ifdef PROFILE 
+      gettimeofday(&start, NULL);
+#endif
       //-------------------------Host Allocations-------------------------
       h_matrix_flat = (unsigned*)malloc(num_branches * sizeof(unsigned));
       h_interleaver = (unsigned*)malloc(num_branches * sizeof(unsigned));
-      h_synd = (int*)calloc(M, sizeof(int));
+      h_synd = (unsigned char*)calloc(M, sizeof(unsigned char));
       h_CtoV = (int*)calloc(num_branches, sizeof(int));
       h_VtoC = (int*)calloc(num_branches, sizeof(int));
       h_messageRecieved = (unsigned*)calloc(N, sizeof(unsigned));
-      h_decoded = (unsigned*)calloc(N, sizeof(unsigned));
+      h_decoded = (unsigned char*)calloc(N, sizeof(unsigned char));
       h_bit_stream = (unsigned char *)calloc(N, sizeof(unsigned char));
       h_MatG = (unsigned **)calloc(M, sizeof(unsigned *));
       for (unsigned m = 0; m < M; m++) {
@@ -188,11 +191,11 @@ int main(int argc, char * argv[]) {
 
       //-------------------------Device Allocations-------------------------
       cudaMalloc((void**)&d_interleaver, num_branches * sizeof(unsigned));
-      cudaMalloc((void**)&d_synd, M * sizeof(int));
+      cudaMalloc((void**)&d_synd, M * sizeof(unsigned char));
       cudaMalloc((void**)&d_CtoV, num_branches * sizeof(int));
       cudaMalloc((void**)&d_VtoC, num_branches * sizeof(int));
       cudaMalloc((void**)&d_messageRecieved, N * sizeof(unsigned));
-      cudaMalloc((void**)&d_decoded, N * sizeof(unsigned));
+      cudaMalloc((void**)&d_decoded, N * sizeof(unsigned char));
       cudaMalloc((void **)&d_bit_stream, N * sizeof(unsigned char));
       cudaMalloc((void **)&d_MatG, M * N * sizeof(unsigned char));
       bin_size = sizeof(unsigned) * N;
@@ -212,7 +215,7 @@ int main(int argc, char * argv[]) {
 
 
 #ifdef VERBOSE
-      std::cout << "Done." << std::endl;
+      std::cout << "Done." << std::endl; 
 
       std::cout << "Performing preliminary calulations...";
 #endif
@@ -253,9 +256,6 @@ int main(int argc, char * argv[]) {
       std::cout << "Done." << std::endl;
 
       std::cout << "Running Gaussian Elimination...";
-#endif
-#ifdef PROFILE 
-      gettimeofday(&start, NULL);
 #endif
 
 
@@ -359,10 +359,10 @@ int main(int argc, char * argv[]) {
             //-----------------------------------------------Decode-----------------------------------------------
             
             //
-            memmove(h_decoded, h_messageRecieved, N * sizeof(unsigned));
+            //memmove(h_decoded, h_messageRecieved, N * sizeof(unsigned));
 
             cudaMemcpy(d_messageRecieved, h_messageRecieved, N * sizeof(unsigned), cudaMemcpyHostToDevice);
-            cudaMemcpy(d_decoded, h_decoded, N * sizeof(unsigned), cudaMemcpyHostToDevice);
+            //cudaMemcpy(d_decoded, h_decoded, N * sizeof(unsigned), cudaMemcpyHostToDevice);
 
             unsigned itter = 0;
             bool hasConverged = false;
@@ -373,7 +373,7 @@ int main(int argc, char * argv[]) {
                   DataPassGB_0 << <GridDim1, BlockDim1 >> > (d_VtoC, d_messageRecieved, d_interleaver, N, num_branches);
                }
                else if (itter < 15) {
-                  DataPassGB_1 << <GridDim1, BlockDim1 >> > (d_VtoC, d_CtoV, d_messageRecieved, d_interleaver, N, num_branches);
+                  DataPassGB_1 << <GridDim1, BlockDim1, num_branches*sizeof(int) >> > (d_VtoC, d_CtoV, d_messageRecieved, d_interleaver, N, num_branches);
                }
                else {
                   DataPassGB_2 << <GridDim1, BlockDim1 >> > (d_VtoC, d_CtoV, d_messageRecieved, d_interleaver, N, num_branches, varr);
@@ -381,20 +381,12 @@ int main(int argc, char * argv[]) {
 
                CheckPassGB << <GridDim2, BlockDim2, num_branches * sizeof(int) >> > (d_CtoV, d_VtoC, M, num_branches);
 
-               APP_GB << <GridDim1, BlockDim1 >> > (d_decoded, d_CtoV, d_messageRecieved, d_interleaver, N, num_branches);
+               APP_GB << <GridDim1, BlockDim1 >> > (d_decoded,d_CtoV, d_messageRecieved, d_interleaver, N, num_branches);
 
-               ComputeSyndrome << <GridDim2, BlockDim2, N * sizeof(int) >> > (d_synd, d_decoded, M, num_branches, N);
+               ComputeSyndrome << <GridDim2, BlockDim2, N * sizeof(unsigned char) >> > (d_synd, d_decoded, M, num_branches, N);
 
-               cudaMemcpy(h_synd, d_synd, M * sizeof(int), cudaMemcpyDeviceToHost);
+               cudaMemcpy(h_synd, d_synd, M * sizeof(unsigned char), cudaMemcpyDeviceToHost);
 
-               // 
-               int count1 = 0;
-               for (unsigned kk = 0; kk < M; kk++) {
-                  if (h_synd[kk] == 1) {
-                     count1++;
-                     break;
-                  }
-               }
 
                // check for convergence
                hasConverged = true;
@@ -408,7 +400,7 @@ int main(int argc, char * argv[]) {
                itter++;
             }
 
-            cudaMemcpy(h_decoded, d_decoded, N * sizeof(unsigned), cudaMemcpyDeviceToHost);
+            cudaMemcpy(h_decoded, d_decoded, N * sizeof(unsigned char), cudaMemcpyDeviceToHost);
 
             //============================================================================
             // Compute Statistics
@@ -418,7 +410,7 @@ int main(int argc, char * argv[]) {
 
             // Calculate bit errors
             for (unsigned k = 0; k < N; k++) {
-               if (h_decoded[k] != message[k]) {
+               if (h_decoded[k] != message[k]) { 
                   err_count++;
                }
             }
@@ -451,7 +443,7 @@ int main(int argc, char * argv[]) {
 #ifdef PROFILE  
          gettimeofday(&stop, NULL);
          diffTime = diff_time_usec(start, stop);
-         fprintf(stderr, " %lu \n", diffTime);
+         fprintf(stderr, "time %lu \n", diffTime);
 #endif 
 
          std::cout << alpha << "\t";

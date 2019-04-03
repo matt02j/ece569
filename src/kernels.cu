@@ -21,6 +21,7 @@ __constant__ unsigned d_matrix_flat[5184];
 
 
 // Message from channel copied into variable node to check node array.
+//TODO Interleaver shared
 __global__ void DataPassGB_0(int * VtoC, unsigned * Receivedword, unsigned * Interleaver, unsigned N, unsigned num_branches) {
    
    // calculate the current index on the grid
@@ -33,14 +34,15 @@ __global__ void DataPassGB_0(int * VtoC, unsigned * Receivedword, unsigned * Int
 
       // 
       unsigned strides = (num_branches / N);
+	int stride_idx = id*strides;
 
       // 
       unsigned i = Receivedword[id];
 
-      for (unsigned stride = 0; stride < strides; stride++) {
+      for (int stride = 0; stride < strides; stride++) {
          
          // get node index from interleaver
-         node_idx = Interleaver[id * strides + stride];
+         node_idx = Interleaver[stride_idx + stride];
          
          VtoC[node_idx] = i;
       }
@@ -49,10 +51,15 @@ __global__ void DataPassGB_0(int * VtoC, unsigned * Receivedword, unsigned * Int
 
 // for iterations between 1 and 15, this kernel launches to pass the message from variables nodes onto 
 // the four check nodes it is connected to.
+//TODO CtoV shared and Interleaver shared
 __global__ void DataPassGB_1(int* VtoC, int* CtoV, unsigned* Receivedword, unsigned* Interleaver, unsigned N, unsigned num_branches) {
    
    // calculate the current index on the grid
    unsigned id = threadIdx.x + blockIdx.x * blockDim.x;
+	extern __shared__ int interleave[];
+	for(int i=threadIdx.x;i<num_branches;i+=blockDim.x){
+		interleave[i]=Interleaver[i];
+	}
 
    if (id < N) {
 
@@ -70,22 +77,22 @@ __global__ void DataPassGB_1(int* VtoC, int* CtoV, unsigned* Receivedword, unsig
 
       // 
       unsigned strides = (num_branches / N);
-
+	int stride_idx = id*strides;
       // 
-      for (unsigned stride = 0; stride < strides; stride++) {
+      for (int stride = 0; stride < strides; stride++) {
 
          // get node index from interleaver
-         node_idx = Interleaver[id * strides + stride];
+         node_idx = interleave[stride_idx + stride];
 
          // 
          Global += (-2) * CtoV[node_idx] + 1;
       }
 
       // 
-      for (unsigned stride = 0; stride < strides; stride++) {
+      for (int stride = 0; stride < strides; stride++) {
 
          // get node index from interleaver
-         node_idx = Interleaver[id * strides + stride];
+         node_idx = interleave[stride_idx + stride];
 
          // 
          // 
@@ -99,6 +106,7 @@ __global__ void DataPassGB_1(int* VtoC, int* CtoV, unsigned* Receivedword, unsig
 
 // for iterations greater than 15, this kernel launches to pass the message from variables nodes onto the four 
 // check nodes it is connected to.
+//TODO CtoV shared and Interleaver shared
 __global__ void DataPassGB_2(int* VtoC, int* CtoV, unsigned* Receivedword, unsigned* Interleaver, unsigned N, unsigned num_branches, unsigned varr) {
    
    // calculate the current index on the grid
@@ -120,21 +128,21 @@ __global__ void DataPassGB_2(int* VtoC, int* CtoV, unsigned* Receivedword, unsig
 
       //
       unsigned strides = (num_branches / N);
-
+	int stride_idx = id*strides;
       //
-      for (unsigned stride = 0; stride < strides; stride++) {
+      for (int stride = 0; stride < strides; stride++) {
 
          // calculate node index
-         node_idx = Interleaver[id * strides + stride];
+         node_idx = Interleaver[stride_idx + stride];
 
          Global += (-2) * CtoV[node_idx] + 1;
       }
 
       // 
-      for (unsigned stride = 0; stride < strides; stride++) {
+      for (int stride = 0; stride < strides; stride++) {
          
          // calculate node index
-         node_idx = Interleaver[id * strides + stride];
+         node_idx = Interleaver[stride_idx + stride];
 
          // 
          // 
@@ -160,33 +168,33 @@ __global__ void CheckPassGB(int* CtoV, int* VtoC, unsigned M, unsigned num_branc
 
    if (id < M) {
 
-      int signe = 0;
+      int sign = 0;
 
       // For indexing the node arrays
       unsigned node_idx = 0;
 
       // 
       unsigned strides = (num_branches / M);
-      
+      int stride_idx =  id*strides;
       // 
-      for (unsigned stride = 0; stride < strides; stride++) {
+      for (int stride = 0; stride < strides; stride++) {
 
-         node_idx = stride + id * strides;
-         signe ^= vtoc[node_idx];
+         node_idx = stride + stride_idx;
+         sign ^= vtoc[node_idx];
       }
       
       // 
-      for (unsigned stride = 0; stride < strides; stride++) {
+      for (int stride = 0; stride < strides; stride++) {
          
-         node_idx = stride + id * strides;
-         CtoV[node_idx] = signe ^ vtoc[node_idx];
+         node_idx = stride + stride_idx;
+         CtoV[node_idx] = sign ^ vtoc[node_idx];
       }
    }
 }
 
 // The following kernel is launched to decide each check node's decision whether the corresponding variable nodes 
 // are in error or not.
-__global__ void APP_GB(unsigned* Decide, int* CtoV, unsigned* Receivedword, unsigned* Interleaver, unsigned N, unsigned num_branches) {
+__global__ void APP_GB(unsigned char* Decide, int* CtoV, unsigned* Receivedword, unsigned* Interleaver, unsigned N, unsigned num_branches) {
    
    // calculate the current index on the grid
    unsigned id = threadIdx.x + blockIdx.x * blockDim.x;
@@ -204,12 +212,12 @@ __global__ void APP_GB(unsigned* Decide, int* CtoV, unsigned* Receivedword, unsi
 
       // 
       unsigned strides = (num_branches / N);
-
+	int stride_idx=id * strides;
       // 
-      for (unsigned stride = 0; stride < strides; stride++) {
+      for (int stride = 0; stride < strides; stride++) {
 
          // TODO this is not coalesced at all
-         node_idx = Interleaver[id * strides + stride];
+         node_idx = Interleaver[stride_idx + stride];
          Global += (-2) * CtoV[node_idx] + 1;
       }
       
@@ -219,23 +227,23 @@ __global__ void APP_GB(unsigned* Decide, int* CtoV, unsigned* Receivedword, unsi
 }
 
 //Here a cumulative decision is made on the variable node error depending upon all the four check nodes to which the variable node is connected to 
-__global__ void ComputeSyndrome(int * Synd, unsigned * Decide, unsigned M, unsigned num_branches, unsigned N) {
-	extern __shared__ int decide[];
+__global__ void ComputeSyndrome(unsigned char * Synd, unsigned char * Decide, unsigned M, unsigned num_branches, unsigned N) {
+	extern __shared__ unsigned char decide[];
    // calculate the current index on the grid
    unsigned id = threadIdx.x + blockIdx.x * blockDim.x;
 
    // intialize ___ regardless of bounds...
-   int synd = 0;
+   unsigned char synd = 0;
    for(int k=threadIdx.x; k<N; k+=blockDim.x){
 	decide[k]=Decide[k];
    }
    if (id < M) {
       
       unsigned strides = (num_branches / M);
-	int i=id * strides;
+	int stride_idx=id * strides;
       // 
-      for (unsigned stride = 0; stride < strides; stride++) {
-         synd ^=decide[d_matrix_flat[i + stride]];
+      for (int stride = 0; stride < strides; stride++) {
+         synd ^=decide[d_matrix_flat[stride_idx + stride]];
       }
    }
 
@@ -287,7 +295,7 @@ __global__ void histogram_private_kernel(unsigned *bins, unsigned num_elements, 
    // Position in grid
    int myId = threadIdx.x + blockIdx.x*blockDim.x;
 
-   unsigned i = myId;
+   int i = myId;
 
    // Initialize the gloabal bins to 0
    while(i < num_bins){

@@ -153,7 +153,7 @@ unsigned GaussianElimination_MRB(unsigned* Perm, unsigned** MatOut, unsigned** M
    return Rank;
 }
 
-#ifdef PROFILE
+//#ifdef PROFILE
 //
 unsigned long diff_time_usec(struct timeval start, struct timeval stop){
   unsigned long diffTime;
@@ -167,10 +167,10 @@ unsigned long diff_time_usec(struct timeval start, struct timeval stop){
   }
   return diffTime;
 }
-#endif
+//#endif
 
 // Initialize the NtoB matrix then unroll it into the interleaved matrix
-// TODO could possibly due with an improvement in the NtoB initialization as the current method seems kinda hacky
+// TODO could possibly due with an improvement in the NtoB initialization as the current method seems kinda hacky 
 // return num_branches
 void initInterleaved(unsigned* h_interleaver, unsigned** data_matrix, const unsigned* rowRanks, const unsigned* hist, const unsigned depth, const unsigned max_val) {
 

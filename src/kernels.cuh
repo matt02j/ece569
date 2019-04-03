@@ -13,7 +13,7 @@
 // Description:      : Header for kernels
 //                   :
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-#ifndef KERNELS_H
+#ifndef KERNELS_H 
 #define KERNELS_H
 
 #include "const.cuh"
@@ -40,10 +40,10 @@ __global__ void CheckPassGB(int* CtoV, int* VtoC, unsigned M, unsigned num_branc
 
 // The following kernel is launched to decide each check node's decision whether the corresponding variable nodes 
 // are in error or not.
-__global__ void APP_GB(unsigned* Decide, int* CtoV, unsigned* Receivedword, unsigned* Interleaver, unsigned N, unsigned num_branches);
+__global__ void APP_GB(unsigned char* Decide, int* CtoV, unsigned* Receivedword, unsigned* Interleaver, unsigned N, unsigned num_branches);
 
 //Here a cumulative decision is made on the variable node error depending upon all the four check nodes to which the variable node is connected to 
-__global__ void ComputeSyndrome(int * Synd, unsigned * Decide, unsigned M, unsigned num_branches, unsigned N);
+__global__ void ComputeSyndrome(unsigned char * Synd, unsigned char* Decide, unsigned M, unsigned num_branches, unsigned N);
 
 
 __global__ void NestedFor(unsigned char* MatG_D, unsigned char* U_D, unsigned k, unsigned N);
