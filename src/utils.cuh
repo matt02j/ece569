@@ -43,7 +43,7 @@ unsigned long diff_time_usec(struct timeval start, struct timeval stop);
 // Initialize the NtoB matrix then unroll it into the interleaved matrix
 // TODO could possibly due with an improvement in the NtoB initialization as the current method seems kinda hacky
 // return num_branches
-void initInterleaved(unsigned* h_interleaver, unsigned** data_matrix, const unsigned* rowRanks, const unsigned* histogram, const unsigned depth, const unsigned max_val);
+void initInterleaved(unsigned * h_interleaver, unsigned** data_matrix, const unsigned* rowRanks, const unsigned* histogram, const unsigned depth, const unsigned max_val);
 
 // read in row rank matrix from local file
 void readRowRanks(unsigned* rowRanks, const unsigned depth, const char* fileName);
@@ -57,5 +57,8 @@ void histogram(unsigned* histogram, unsigned** data_matrix, const unsigned* rowR
 // unroll the data matrix
 void unrollMatrix(unsigned* unrolledMatrix, unsigned** data_matrix, const unsigned* rowRanks, const unsigned depth, const unsigned num_branches);
 
+
+void print_array_int(int* arr, int size);
+void print_array_char(char* arr, int size);
 
 #endif

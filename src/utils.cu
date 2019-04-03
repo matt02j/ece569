@@ -172,7 +172,7 @@ unsigned long diff_time_usec(struct timeval start, struct timeval stop){
 // Initialize the NtoB matrix then unroll it into the interleaved matrix
 // TODO could possibly due with an improvement in the NtoB initialization as the current method seems kinda hacky 
 // return num_branches
-void initInterleaved(unsigned* h_interleaver, unsigned** data_matrix, const unsigned* rowRanks, const unsigned* hist, const unsigned depth, const unsigned max_val) {
+void initInterleaved(unsigned * h_interleaver, unsigned** data_matrix, const unsigned* rowRanks, const unsigned* hist, const unsigned depth, const unsigned max_val) {
 
    /*******
    * NtoB *
@@ -226,10 +226,12 @@ void initInterleaved(unsigned* h_interleaver, unsigned** data_matrix, const unsi
 
    // unroll NtoB into interleaver vector
    unsigned i = 0;
-   for (unsigned n = 0; n < max_val; n++) {
-      for (unsigned k = 0; k < hist[n]; k++) {
 
-         h_interleaver[i] = NtoB[n][k];
+//TODO verify why we need a histogram when they are all the same
+   for (unsigned k = 0; k < hist[0]; k++) {
+      for (unsigned n = 0; n < max_val; n++) {
+
+         h_interleaver[i] =NtoB[n][k];
          i++;
       }
    }
@@ -290,3 +292,15 @@ void unrollMatrix(unsigned* unrolledMatrix, unsigned** data_matrix, const unsign
    }
 }
 
+void print_array_int(int* arr, int size){
+	for(int i=0; i<size; i++){
+		printf("%d ",arr[i]);
+	}
+	printf("\n");
+}
+void print_array_char(char* arr, int size){
+	for(int i=0; i<size; i++){
+		printf("%d ",arr[i]);
+	}
+	printf("\n");
+}

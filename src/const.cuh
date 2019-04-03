@@ -55,7 +55,7 @@
 constexpr double PI = 3.1415926536;
 constexpr unsigned M = 648;
 constexpr unsigned N = 1296;
-constexpr unsigned BLOCK_DIM_1 = 1024;
+constexpr unsigned BLOCK_DIM_1 = 256;
 constexpr unsigned BLOCK_DIM_2 = 1024;
 
 #endif

@@ -105,9 +105,9 @@ int main(int argc, char * argv[]) {
       //-------------------------Host memory structures-------------------------
       unsigned* h_matrix_flat;      // unrolled matrix
       unsigned* h_interleaver;      // ...
-      int* h_CtoV;                  // ...
-      int* h_VtoC;                  // ...
-      unsigned* h_messageRecieved;  // message after bit-flipping noise is applied
+      unsigned char* h_CtoV;                  // ...
+      unsigned char* h_VtoC;                  // ...
+      unsigned char* h_messageRecieved;  // message after bit-flipping noise is applied
       unsigned char* h_decoded;          // message decoded
       unsigned char* h_synd;                  // ...
       unsigned char* h_bit_stream;       // Randomly generated bit stream 
@@ -118,9 +118,9 @@ int main(int argc, char * argv[]) {
       //-------------------------Device memory structures-------------------------
       // unsigned* d_matrix_flat;      // held as global in constant memory
       unsigned* d_interleaver;      // ...
-      int* d_CtoV;                  // 
-      int* d_VtoC;                  // 
-      unsigned* d_messageRecieved;  // message after bit-flipping noise is applied
+      unsigned char* d_CtoV;                  // 
+      unsigned char* d_VtoC;                  // 
+      unsigned char* d_messageRecieved;  // message after bit-flipping noise is applied
       unsigned char* d_decoded;          // message decoded
       unsigned char* d_synd;                  // ...
       unsigned char* d_bit_stream;       // Randomly generated bit stream 
@@ -178,9 +178,9 @@ int main(int argc, char * argv[]) {
       h_matrix_flat = (unsigned*)malloc(num_branches * sizeof(unsigned));
       h_interleaver = (unsigned*)malloc(num_branches * sizeof(unsigned));
       h_synd = (unsigned char*)calloc(M, sizeof(unsigned char));
-      h_CtoV = (int*)calloc(num_branches, sizeof(int));
-      h_VtoC = (int*)calloc(num_branches, sizeof(int));
-      h_messageRecieved = (unsigned*)calloc(N, sizeof(unsigned));
+      h_CtoV = (unsigned char*)calloc(num_branches, sizeof(unsigned char));
+      h_VtoC = (unsigned char*)calloc(num_branches, sizeof(unsigned char));
+      h_messageRecieved = (unsigned char*)calloc(N, sizeof(unsigned char));
       h_decoded = (unsigned char*)calloc(N, sizeof(unsigned char));
       h_bit_stream = (unsigned char *)calloc(N, sizeof(unsigned char));
       h_MatG = (unsigned **)calloc(M, sizeof(unsigned *));
@@ -192,9 +192,9 @@ int main(int argc, char * argv[]) {
       //-------------------------Device Allocations-------------------------
       cudaMalloc((void**)&d_interleaver, num_branches * sizeof(unsigned));
       cudaMalloc((void**)&d_synd, M * sizeof(unsigned char));
-      cudaMalloc((void**)&d_CtoV, num_branches * sizeof(int));
-      cudaMalloc((void**)&d_VtoC, num_branches * sizeof(int));
-      cudaMalloc((void**)&d_messageRecieved, N * sizeof(unsigned));
+      cudaMalloc((void**)&d_CtoV, num_branches * sizeof(unsigned char));
+      cudaMalloc((void**)&d_VtoC, num_branches * sizeof(unsigned char));
+      cudaMalloc((void**)&d_messageRecieved, N * sizeof(unsigned char));
       cudaMalloc((void**)&d_decoded, N * sizeof(unsigned char));
       cudaMalloc((void **)&d_bit_stream, N * sizeof(unsigned char));
       cudaMalloc((void **)&d_MatG, M * N * sizeof(unsigned char));
@@ -294,7 +294,7 @@ int main(int argc, char * argv[]) {
          for (unsigned n = 0; n < N; n++) {
             h_MatG_flat[m * N + n] = (unsigned char)h_MatG[m][n];
          }
-      }
+      } 
 
 
       // copy h_MatG_flat to device only once
@@ -312,8 +312,8 @@ int main(int argc, char * argv[]) {
          err_count = 0;
 
          //these are both all 0s? 
-         cudaMemcpy(d_CtoV, h_CtoV, num_branches * sizeof(int), cudaMemcpyHostToDevice);
-         cudaMemcpy(d_VtoC, h_VtoC, num_branches * sizeof(int), cudaMemcpyHostToDevice);
+         cudaMemcpy(d_CtoV, h_CtoV, num_branches * sizeof(unsigned char), cudaMemcpyHostToDevice);
+         cudaMemcpy(d_VtoC, h_VtoC, num_branches * sizeof(unsigned char), cudaMemcpyHostToDevice);
 
          frames_tested = 0;
          unsigned nb = 0;
@@ -341,7 +341,7 @@ int main(int argc, char * argv[]) {
             cudaMemcpy(h_bit_stream, d_bit_stream, N * sizeof(unsigned char), cudaMemcpyDeviceToHost);
             
             for (unsigned k = 0; k < N; k++) {
-               message[PermG[k]] = (int)h_bit_stream[k];
+               message[PermG[k]] = h_bit_stream[k];
             }
 #endif
             //---------------------------------------Simulate Channel---------------------------------------
@@ -361,32 +361,31 @@ int main(int argc, char * argv[]) {
             //
             //memmove(h_decoded, h_messageRecieved, N * sizeof(unsigned));
 
-            cudaMemcpy(d_messageRecieved, h_messageRecieved, N * sizeof(unsigned), cudaMemcpyHostToDevice);
+            cudaMemcpy(d_messageRecieved, h_messageRecieved, N * sizeof(unsigned char), cudaMemcpyHostToDevice);
             //cudaMemcpy(d_decoded, h_decoded, N * sizeof(unsigned), cudaMemcpyHostToDevice);
-
             unsigned itter = 0;
             bool hasConverged = false;
             while (itter < itteration_count && !hasConverged) {
 
                // Different itterations have different kernels
                if (itter == 0) {
-                  DataPassGB_0 << <GridDim1, BlockDim1 >> > (d_VtoC, d_messageRecieved, d_interleaver, N, num_branches);
+                  DataPassGB_0 << <GridDim1, BlockDim1,num_branches * sizeof(unsigned) >> > (d_VtoC, d_messageRecieved, d_interleaver, N, num_branches);
                }
                else if (itter < 15) {
-                  DataPassGB_1 << <GridDim1, BlockDim1, num_branches*sizeof(int) >> > (d_VtoC, d_CtoV, d_messageRecieved, d_interleaver, N, num_branches);
+                  DataPassGB_1 << <GridDim1, BlockDim1, num_branches*sizeof(unsigned char) + num_branches*sizeof(unsigned) >> > (d_VtoC, d_CtoV, d_messageRecieved, d_interleaver, N, num_branches);
                }
                else {
                   DataPassGB_2 << <GridDim1, BlockDim1 >> > (d_VtoC, d_CtoV, d_messageRecieved, d_interleaver, N, num_branches, varr);
                }
 
-               CheckPassGB << <GridDim2, BlockDim2, num_branches * sizeof(int) >> > (d_CtoV, d_VtoC, M, num_branches);
+               CheckPassGB << <GridDim2, BlockDim2, num_branches * sizeof(unsigned char) >> > (d_CtoV, d_VtoC, M, num_branches);
 
                APP_GB << <GridDim1, BlockDim1 >> > (d_decoded,d_CtoV, d_messageRecieved, d_interleaver, N, num_branches);
 
                ComputeSyndrome << <GridDim2, BlockDim2, N * sizeof(unsigned char) >> > (d_synd, d_decoded, M, num_branches, N);
 
                cudaMemcpy(h_synd, d_synd, M * sizeof(unsigned char), cudaMemcpyDeviceToHost);
-
+ 
 
                // check for convergence
                hasConverged = true;
