@@ -145,7 +145,7 @@ unsigned GaussianElimination_MRB(unsigned* Perm, unsigned** MatOut, unsigned** M
                MatOut[m][k] = MatOut[n][k] ^ MatOut[m][k];
             }
          }
-      }
+      } 
    }
 
    free(Index);

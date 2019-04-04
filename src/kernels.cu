@@ -29,8 +29,8 @@ __global__ void DataPassGB_0(unsigned char * VtoC, unsigned char * Receivedword,
       unsigned strides = (num_branches / N);
 	/*extern __shared__ unsigned interleave[]; //made it slower
 
-	for(int i=blockIdx.x*blockDim.x*4 + threadIdx.x; i<(blockDim.x*blockIdx.x+blockDim.x-1)*4 +4 && i< num_branches; i+=blockDim.x){
-		interleave[i] = Interleaver[i];
+	for(int i=0; i< strides; i+=1){
+		interleave[threadIdx.x +i*blockDim.x] = Interleaver[id+i*N];
 	}
 
 	__syncthreads();*/
@@ -87,7 +87,6 @@ __global__ void DataPassGB_1(unsigned char * VtoC, unsigned char * CtoV, unsigne
 
       // 
       unsigned strides = (num_branches / N);
-	int stride_idx = id*strides;
       // 
       for (int stride = 0; stride < strides; stride++) {
 
@@ -138,7 +137,6 @@ __global__ void DataPassGB_2(unsigned char* VtoC, unsigned char* CtoV, unsigned 
 
       //
       unsigned strides = (num_branches / N);
-	int stride_idx = id*strides;
       //
       for (int stride = 0; stride < strides; stride++) {
 
@@ -167,14 +165,14 @@ __global__ void DataPassGB_2(unsigned char* VtoC, unsigned char* CtoV, unsigned 
 // This kernel is launched to check if the CtoV copies the same information as VtoC depending upon the signe value
 __global__ void CheckPassGB(unsigned char* CtoV, unsigned char* VtoC, unsigned M, unsigned num_branches) {
   
-  	extern __shared__ unsigned char vtoc[];
+  	//extern __shared__ unsigned char vtoc[];
    // calculate the current index on the grid
    unsigned id = threadIdx.x + blockIdx.x * blockDim.x;
 
 
-   for(int k=threadIdx.x; k<num_branches; k+=blockDim.x){
-	vtoc[k]=VtoC[k];
-   }
+  // for(int k=threadIdx.x; k<num_branches; k+=blockDim.x){
+//	vtoc[k]=VtoC[k];
+   //}
 
    if (id < M) {
 
@@ -190,14 +188,14 @@ __global__ void CheckPassGB(unsigned char* CtoV, unsigned char* VtoC, unsigned M
       for (int stride = 0; stride < strides; stride++) {
 
          node_idx = stride + stride_idx;
-         sign ^= vtoc[node_idx];
+         sign ^= VtoC[node_idx];
       }
       
       // 
       for (int stride = 0; stride < strides; stride++) {
          
          node_idx = stride + stride_idx;
-         CtoV[node_idx] = sign ^ vtoc[node_idx];
+         CtoV[node_idx] = sign ^ VtoC[node_idx];
       }
    }
 }
@@ -222,7 +220,6 @@ __global__ void APP_GB(unsigned char* Decide, unsigned char* CtoV, unsigned char
 
       // 
       unsigned strides = (num_branches / N);
-	int stride_idx=id * strides;
       // 
       for (int stride = 0; stride < strides; stride++) {
 
@@ -238,22 +235,23 @@ __global__ void APP_GB(unsigned char* Decide, unsigned char* CtoV, unsigned char
 
 //Here a cumulative decision is made on the variable node error depending upon all the four check nodes to which the variable node is connected to 
 __global__ void ComputeSyndrome(unsigned char * Synd, unsigned char * Decide, unsigned M, unsigned num_branches, unsigned N) {
-	extern __shared__ unsigned char decide[];
+	//extern __shared__ unsigned char decide[];
    // calculate the current index on the grid
    unsigned id = threadIdx.x + blockIdx.x * blockDim.x;
 
    // intialize ___ regardless of bounds...
    unsigned char synd = 0;
-   for(int k=threadIdx.x; k<N; k+=blockDim.x){
-	decide[k]=Decide[k];
-   }
+   //for(int k=threadIdx.x; k<N; k+=blockDim.x){
+//	decide[k]=Decide[k];
+   //}
+   //__syncthreads();
    if (id < M) {
       
       unsigned strides = (num_branches / M);
 	int stride_idx=id * strides;
       // 
       for (int stride = 0; stride < strides; stride++) {
-         synd ^=decide[d_matrix_flat[stride_idx + stride]];
+         synd ^=Decide[d_matrix_flat[stride_idx + stride]];
       }
    }
 

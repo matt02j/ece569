@@ -115,6 +115,24 @@ int main(int argc, char * argv[]) {
       unsigned char* h_MatG_flat;        // MatG flattened    
       unsigned bin_size = 0;
 
+	#ifdef NUMSTREAMS
+		cudaStream_t s1,s2;
+		cudaEvent_t start1, stop1, start2, stop2;
+		unsigned char* h_CtoV1;                  // ...
+      		unsigned char* h_VtoC1;                  // ...
+      		unsigned char* h_messageRecieved1;  // message after bit-flipping noise is applied
+      		unsigned char* h_decoded1;          // message decoded
+      		unsigned char* h_synd1;                  // ...
+      		unsigned char* h_bit_stream1;       // Randomly generated bit stream 
+      		unsigned char* d_CtoV1;                  // 
+      		unsigned char* d_VtoC1;                  // 
+      		unsigned char* d_messageRecieved1;  // message after bit-flipping noise is applied
+      		unsigned char* d_decoded1;          // message decoded
+      		unsigned char* d_synd1;                  // ...
+      		unsigned char* d_bit_stream1;       // Randomly generated bit stream
+      		unsigned* message1;         // test message {0,1,0,0,1,0,...} 
+	#endif
+
       //-------------------------Device memory structures-------------------------
       // unsigned* d_matrix_flat;      // held as global in constant memory
       unsigned* d_interleaver;      // ...
@@ -172,23 +190,29 @@ int main(int argc, char * argv[]) {
       std::cout << "Allocating memory...";
 #endif
 #ifdef PROFILE 
-      gettimeofday(&start, NULL);
+      gettimeofday(&start, NULL); 
 #endif
       //-------------------------Host Allocations-------------------------
       h_matrix_flat = (unsigned*)malloc(num_branches * sizeof(unsigned));
       h_interleaver = (unsigned*)malloc(num_branches * sizeof(unsigned));
-      h_synd = (unsigned char*)calloc(M, sizeof(unsigned char));
-      h_CtoV = (unsigned char*)calloc(num_branches, sizeof(unsigned char));
-      h_VtoC = (unsigned char*)calloc(num_branches, sizeof(unsigned char));
-      h_messageRecieved = (unsigned char*)calloc(N, sizeof(unsigned char));
-      h_decoded = (unsigned char*)calloc(N, sizeof(unsigned char));
-      h_bit_stream = (unsigned char *)calloc(N, sizeof(unsigned char));
+      //h_synd = (unsigned char*)calloc(M, sizeof(unsigned char));
+      //h_CtoV = (unsigned char*)calloc(num_branches, sizeof(unsigned char));
+      //h_VtoC = (unsigned char*)calloc(num_branches, sizeof(unsigned char));
+      //h_messageRecieved = (unsigned char*)calloc(N, sizeof(unsigned char));
+      //h_decoded = (unsigned char*)calloc(N, sizeof(unsigned char));
+      //h_bit_stream = (unsigned char *)calloc(N, sizeof(unsigned char));
       h_MatG = (unsigned **)calloc(M, sizeof(unsigned *));
       for (unsigned m = 0; m < M; m++) {
          h_MatG[m] = (unsigned *)calloc(N, sizeof(unsigned));
       }
       h_MatG_flat = (unsigned char*)malloc(M*N * sizeof(unsigned char));
-
+	cudaMallocHost((void**)&h_synd,M*sizeof(unsigned char));
+	cudaMallocHost((void**)&h_bit_stream,N*sizeof(unsigned char));
+	
+	cudaMallocHost((void**)&h_CtoV,num_branches*sizeof(unsigned char));
+	cudaMallocHost((void**)&h_VtoC,num_branches*sizeof(unsigned char));
+	cudaMallocHost((void**)&h_messageRecieved,N*sizeof(unsigned char));
+	cudaMallocHost((void**)&h_decoded,N*sizeof(unsigned char));
       //-------------------------Device Allocations-------------------------
       cudaMalloc((void**)&d_interleaver, num_branches * sizeof(unsigned));
       cudaMalloc((void**)&d_synd, M * sizeof(unsigned char));
@@ -203,7 +227,26 @@ int main(int argc, char * argv[]) {
       cudaMalloc((void**) &d_Bins, bin_size);
 
       //-------------------------Other Allocations-------------------------
+	#ifdef NUMSTREAMS
+	cudaEventCreate( &start1);
+	cudaEventCreate( &start2);
+	cudaStreamCreate( &s1 );
+	cudaStreamCreate( &s2 );
+	cudaMallocHost((void**)&h_CtoV1,num_branches*sizeof(unsigned char));
+	cudaMallocHost((void**)&h_VtoC1,num_branches*sizeof(unsigned char));
+	cudaMallocHost((void**)&h_messageRecieved1,N*sizeof(unsigned char));
+	cudaMallocHost((void**)&h_decoded1,N*sizeof(unsigned char));
+	cudaMallocHost((void**)&h_synd1,M*sizeof(unsigned char));
+	cudaMallocHost((void**)&h_bit_stream1,N*sizeof(unsigned char));
+     	cudaMalloc((void**)&d_synd1, M * sizeof(unsigned char));
+      	cudaMalloc((void**)&d_CtoV1, num_branches * sizeof(unsigned char));
+     	cudaMalloc((void**)&d_VtoC1, num_branches * sizeof(unsigned char));
+     	cudaMalloc((void**)&d_messageRecieved1, N * sizeof(unsigned char));
+      	cudaMalloc((void**)&d_decoded1, N * sizeof(unsigned char));
+      	cudaMalloc((void **)&d_bit_stream1, N * sizeof(unsigned char));
+        message1 = (unsigned *)calloc(N, sizeof(unsigned));
 
+	#endif
       message = (unsigned *)calloc(N, sizeof(unsigned));
 
       sparse_matrix = (unsigned **)calloc(M, sizeof(unsigned *));
@@ -226,7 +269,7 @@ int main(int argc, char * argv[]) {
       // Copying contents from the host to the device
 
       cudaMemcpyToSymbol(d_matrix_flat, h_matrix_flat, num_branches * sizeof(unsigned));
-
+ 
       // generate histogram on the data matrix
 
       histogram_private_kernel<<<GridDim1, BlockDim1,N * sizeof(unsigned int)>>>(d_Bins, num_branches, N);
@@ -311,10 +354,13 @@ int main(int argc, char * argv[]) {
          missed_error_count = 0;
          err_count = 0;
 
-         //these are both all 0s? 
-         cudaMemcpy(d_CtoV, h_CtoV, num_branches * sizeof(unsigned char), cudaMemcpyHostToDevice);
-         cudaMemcpy(d_VtoC, h_VtoC, num_branches * sizeof(unsigned char), cudaMemcpyHostToDevice);
-
+         //these are both all 0s?  // change to cuda memset
+         cudaMemcpyAsync(d_CtoV, h_CtoV, num_branches * sizeof(unsigned char), cudaMemcpyHostToDevice,s1);
+         cudaMemcpyAsync(d_VtoC, h_VtoC, num_branches * sizeof(unsigned char), cudaMemcpyHostToDevice,s1);
+	 #ifdef NUMSTREAMS
+         cudaMemcpyAsync(d_CtoV1, h_CtoV, num_branches * sizeof(unsigned char), cudaMemcpyHostToDevice,s2);
+         cudaMemcpyAsync(d_VtoC1, h_VtoC, num_branches * sizeof(unsigned char), cudaMemcpyHostToDevice,s2);
+	 #endif
          frames_tested = 0;
          unsigned nb = 0;
          while (nb < NbMonteCarlo && err_total_count != frame_count) {
@@ -334,15 +380,31 @@ int main(int argc, char * argv[]) {
                h_bit_stream[k] = (unsigned char)floor(dist(e2) * 2);
             }
 
-
             //replace that super long loop
-            cudaMemcpy(d_bit_stream, h_bit_stream, N * sizeof(unsigned char), cudaMemcpyHostToDevice);
-            NestedFor <<<NestedGrid, NestedBlock, N * sizeof(unsigned char) >>>(d_MatG, d_bit_stream, rank - 1, N);
-            cudaMemcpy(h_bit_stream, d_bit_stream, N * sizeof(unsigned char), cudaMemcpyDeviceToHost);
+            cudaMemcpyAsync(d_bit_stream, h_bit_stream, N * sizeof(unsigned char), cudaMemcpyHostToDevice,s1);
+            NestedFor <<<NestedGrid, NestedBlock, N * sizeof(unsigned char),s1 >>>(d_MatG, d_bit_stream, rank - 1, N);
+            cudaMemcpyAsync(h_bit_stream, d_bit_stream, N * sizeof(unsigned char), cudaMemcpyDeviceToHost,s1);
             
-            for (unsigned k = 0; k < N; k++) {
+           
+
+	#ifdef NUMSTREAM
+            //
+            memset(h_bit_stream1, 0, rank * sizeof(unsigned char));
+
+            // randomly gerenates a uniform distribution of 0s and 1s
+            for (unsigned k = rank; k < N; k++) {
+               h_bit_stream1[k] = (unsigned char)floor(dist(e2) * 2);
+            }
+            cudaMemcpyAsync(d_bit_stream1, h_bit_stream1, N * sizeof(unsigned char), cudaMemcpyHostToDevice,s2);
+            NestedFor <<<NestedGrid, NestedBlock, N * sizeof(unsigned char),s2 >>>(d_MatG, d_bit_stream1, rank - 1, N);
+            cudaMemcpyAsync(h_bit_stream1, d_bit_stream1, N * sizeof(unsigned char), cudaMemcpyDeviceToHost,s2);
+            
+	#endif 
+		cudaStreamSynchronize(s1);
+	    for (unsigned k = 0; k < N; k++) {
                message[PermG[k]] = h_bit_stream[k];
             }
+		
 #endif
             //---------------------------------------Simulate Channel---------------------------------------
 
@@ -355,58 +417,91 @@ int main(int argc, char * argv[]) {
                   h_messageRecieved[n] = message[n];
                }
             }
-
+		cudaStreamSynchronize(s2);
+            for (unsigned k = 0; k < N; k++) {
+               message1[PermG[k]] = h_bit_stream1[k];
+            }
+	    for (unsigned n = 0; n < N; n++) {
+               if (dist(e2) < alpha) {
+                  h_messageRecieved1[n] = 1 - message1[n];
+               }
+               else {
+                  h_messageRecieved1[n] = message1[n];
+               }
+            }
             //-----------------------------------------------Decode-----------------------------------------------
             
             //
             //memmove(h_decoded, h_messageRecieved, N * sizeof(unsigned));
 
-            cudaMemcpy(d_messageRecieved, h_messageRecieved, N * sizeof(unsigned char), cudaMemcpyHostToDevice);
+            cudaMemcpyAsync(d_messageRecieved, h_messageRecieved, N * sizeof(unsigned char), cudaMemcpyHostToDevice,s1);
+            cudaMemcpyAsync(d_messageRecieved1, h_messageRecieved1, N * sizeof(unsigned char), cudaMemcpyHostToDevice,s2);
             //cudaMemcpy(d_decoded, h_decoded, N * sizeof(unsigned), cudaMemcpyHostToDevice);
             unsigned itter = 0;
             bool hasConverged = false;
-            while (itter < itteration_count && !hasConverged) {
+            bool hasConverged1 = false;
+            while (itter < itteration_count && (!hasConverged || !hasConverged1)) {
 
                // Different itterations have different kernels
                if (itter == 0) {
-                  DataPassGB_0 << <GridDim1, BlockDim1,num_branches * sizeof(unsigned) >> > (d_VtoC, d_messageRecieved, d_interleaver, N, num_branches);
+                  if(!hasConverged)DataPassGB_0 << <GridDim1, BlockDim1 ,0,s1>> > (d_VtoC, d_messageRecieved, d_interleaver, N, num_branches);
+                  if(!hasConverged1)DataPassGB_0 << <GridDim1, BlockDim1 ,0,s2>> > (d_VtoC, d_messageRecieved, d_interleaver, N, num_branches);
                }
                else if (itter < 15) {
-                  DataPassGB_1 << <GridDim1, BlockDim1, num_branches*sizeof(unsigned char) + num_branches*sizeof(unsigned) >> > (d_VtoC, d_CtoV, d_messageRecieved, d_interleaver, N, num_branches);
+                  if(!hasConverged)DataPassGB_1 << <GridDim1, BlockDim1, num_branches*sizeof(unsigned char) + num_branches*sizeof(unsigned) ,s1>> > (d_VtoC, d_CtoV, d_messageRecieved, d_interleaver, N, num_branches);
+                 if(!hasConverged1) DataPassGB_1 << <GridDim1, BlockDim1, num_branches*sizeof(unsigned char) + num_branches*sizeof(unsigned) ,s2>> > (d_VtoC1, d_CtoV1, d_messageRecieved1, d_interleaver, N, num_branches);
                }
                else {
-                  DataPassGB_2 << <GridDim1, BlockDim1 >> > (d_VtoC, d_CtoV, d_messageRecieved, d_interleaver, N, num_branches, varr);
+                  if(!hasConverged)DataPassGB_2 << <GridDim1, BlockDim1 ,0,s1>> > (d_VtoC, d_CtoV, d_messageRecieved, d_interleaver, N, num_branches, varr);
+                  if(!hasConverged1)DataPassGB_2 << <GridDim1, BlockDim1 ,0,s2>> > (d_VtoC1, d_CtoV1, d_messageRecieved1, d_interleaver, N, num_branches, varr);
                }
 
-               CheckPassGB << <GridDim2, BlockDim2, num_branches * sizeof(unsigned char) >> > (d_CtoV, d_VtoC, M, num_branches);
+               if(!hasConverged)CheckPassGB << <GridDim2, BlockDim2, num_branches * sizeof(unsigned char),s1 >> > (d_CtoV, d_VtoC, M, num_branches);
+               if(!hasConverged1)CheckPassGB << <GridDim2, BlockDim2, num_branches * sizeof(unsigned char),s2 >> > (d_CtoV1, d_VtoC1, M, num_branches);
 
-               APP_GB << <GridDim1, BlockDim1 >> > (d_decoded,d_CtoV, d_messageRecieved, d_interleaver, N, num_branches);
+               if(!hasConverged)APP_GB << <GridDim1, BlockDim1 ,0,s1>> > (d_decoded,d_CtoV, d_messageRecieved, d_interleaver, N, num_branches);
+               if(!hasConverged1)APP_GB << <GridDim1, BlockDim1 ,0,s2>> > (d_decoded1,d_CtoV1, d_messageRecieved1, d_interleaver, N, num_branches);
 
-               ComputeSyndrome << <GridDim2, BlockDim2, N * sizeof(unsigned char) >> > (d_synd, d_decoded, M, num_branches, N);
+              if(!hasConverged) ComputeSyndrome << <GridDim2, BlockDim2, N * sizeof(unsigned char),s1 >> > (d_synd, d_decoded, M, num_branches, N);
+               if(!hasConverged)cudaMemcpyAsync(h_synd, d_synd, M * sizeof(unsigned char), cudaMemcpyDeviceToHost,s1);
+               if(!hasConverged1)ComputeSyndrome << <GridDim2, BlockDim2, N * sizeof(unsigned char),s2 >> > (d_synd1, d_decoded1, M, num_branches, N);
 
-               cudaMemcpy(h_synd, d_synd, M * sizeof(unsigned char), cudaMemcpyDeviceToHost);
+               if(!hasConverged1)cudaMemcpyAsync(h_synd1, d_synd1, M * sizeof(unsigned char), cudaMemcpyDeviceToHost,s2);
  
-
-               // check for convergence
-               hasConverged = true;
-               for (unsigned kk = 0; kk < M; kk++) {
-                  if (h_synd[kk] == 1) {
-                     hasConverged = false;
-                     break;
-                  }
-               }
-
+		if(!hasConverged){
+		       // check for convergence
+			cudaStreamSynchronize(s1);
+		       hasConverged = true;
+		       for (unsigned kk = 0; kk < M; kk++) {
+		          if (h_synd[kk] == 1) {
+		             hasConverged = false;
+		             break;
+		          }
+		       }
+		}
+		if(!hasConverged1){
+			cudaStreamSynchronize(s2);
+		       hasConverged1 = true;
+		       for (unsigned kk = 0; kk < M; kk++) {
+		          if (h_synd[kk] == 1) {
+		             hasConverged1 = false;
+		             break;
+		          }
+		       }
+		}
                itter++;
             }
 
-            cudaMemcpy(h_decoded, d_decoded, N * sizeof(unsigned char), cudaMemcpyDeviceToHost);
+            cudaMemcpyAsync(h_decoded, d_decoded, N * sizeof(unsigned char), cudaMemcpyDeviceToHost,s1);
+            cudaMemcpyAsync(h_decoded1, d_decoded1, N * sizeof(unsigned char), cudaMemcpyDeviceToHost,s2);
 
             //============================================================================
             // Compute Statistics
             //============================================================================
-            frames_tested++;
+            frames_tested+=2;
             err_count = 0;
 
+		cudaStreamSynchronize(s1);
             // Calculate bit errors
             for (unsigned k = 0; k < N; k++) {
                if (h_decoded[k] != message[k]) { 
@@ -420,15 +515,42 @@ int main(int argc, char * argv[]) {
                NiterMoy = NiterMoy + itteration_count;
                err_total_count++;
             }
-
             // Case Convergence to Right message
-            if ((hasConverged) && (err_count == 0)) {
+            else if (err_count == 0) {
                NiterMax = max(NiterMax, itter + 1);
                NiterMoy = NiterMoy + (itter + 1);
             }
+           // Case Convergence to Wrong message
+            else{
+               NiterMax = max(NiterMax, itter + 1);
+               NiterMoy = NiterMoy + (itter + 1);
+               err_total_count++;
+               missed_error_count++;
+               Dmin = min(Dmin, err_count);
+            }
 
-            // Case Convergence to Wrong message
-            if ((hasConverged) && (err_count != 0)) {
+		cudaStreamSynchronize(s2);
+		err_count=0;
+           // Calculate bit errors
+            for (unsigned k = 0; k < N; k++) {
+               if (h_decoded1[k] != message1[k]) { 
+                  err_count++;
+               }
+            }
+            bit_error_count += err_count;
+
+            // Case Divergence
+            if (!hasConverged) {
+               NiterMoy = NiterMoy + itteration_count;
+               err_total_count++;
+            }
+            // Case Convergence to Right message
+            else if (err_count == 0) {
+               NiterMax = max(NiterMax, itter + 1);
+               NiterMoy = NiterMoy + (itter + 1);
+            }
+           // Case Convergence to Wrong message
+            else{
                NiterMax = max(NiterMax, itter + 1);
                NiterMoy = NiterMoy + (itter + 1);
                err_total_count++;
@@ -460,8 +582,25 @@ int main(int argc, char * argv[]) {
       cudaFree(d_interleaver);
       cudaFree(d_synd);
       cudaFree(d_messageRecieved);
+      cudaFree(d_decoded1);
+      cudaFree(d_CtoV1);
+      cudaFree(d_VtoC1);
+      cudaFree(d_synd1);
+      cudaFree(d_messageRecieved1);
       cudaFree(d_decoded);
       cudaFree(d_Bins);
+	cudaFreeHost(h_bit_stream);
+	cudaFreeHost(h_synd);
+	cudaFreeHost(h_CtoV);
+	cudaFreeHost(h_VtoC);
+	cudaFreeHost(h_decoded);
+	cudaFreeHost(h_messageRecieved);
+	cudaFreeHost(h_bit_stream1);
+	cudaFreeHost(h_synd1);
+	cudaFreeHost(h_CtoV1);
+	cudaFreeHost(h_VtoC1);
+	cudaFreeHost(h_decoded1);
+	cudaFreeHost(h_messageRecieved1);
    }
    else {
       fprintf(stderr, "Usage: PGaB /Path/To/Data/File");
