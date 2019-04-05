@@ -387,7 +387,7 @@ int main(int argc, char * argv[]) {
             
            
 
-	#ifdef NUMSTREAM
+#ifdef NUMSTREAM
             //
             memset(h_bit_stream1, 0, rank * sizeof(unsigned char));
 
@@ -399,7 +399,7 @@ int main(int argc, char * argv[]) {
             NestedFor <<<NestedGrid, NestedBlock, N * sizeof(unsigned char),s2 >>>(d_MatG, d_bit_stream1, rank - 1, N);
             cudaMemcpyAsync(h_bit_stream1, d_bit_stream1, N * sizeof(unsigned char), cudaMemcpyDeviceToHost,s2);
             
-	#endif 
+#endif 
 		cudaStreamSynchronize(s1);
 	    for (unsigned k = 0; k < N; k++) {
                message[PermG[k]] = h_bit_stream[k];
@@ -605,6 +605,5 @@ int main(int argc, char * argv[]) {
    else {
       fprintf(stderr, "Usage: PGaB /Path/To/Data/File");
    }
-
    return 0;
 }
