@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<project>
-	<configuration id="com.nvidia.cuda.ide.toolchain.on_path.1135792835" name="Default">
-		<extension point="org.eclipse.cdt.core.LanguageSettingsProvider">
-			<provider id="org.eclipse.cdt.build.crossgcc.CrossGCCBuiltinSpecsDetector"/>
-		</extension>
-	</configuration>
-</project>
