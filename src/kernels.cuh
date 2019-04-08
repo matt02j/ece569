@@ -51,4 +51,6 @@ __global__ void NestedFor(unsigned char* MatG_D, unsigned char* U_D, unsigned k,
 
 __global__ void histogram_private_kernel(unsigned *bins, unsigned num_elements, unsigned num_bins);
 
+__global__ void setup_kernel ( curandState * state, unsigned long seed);
+
 #endif
