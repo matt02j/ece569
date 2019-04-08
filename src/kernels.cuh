@@ -17,6 +17,7 @@
 #define KERNELS_H
 
 #include "const.cuh"
+#include <curand_kernel.h>
 
 #ifdef __linux
 extern __constant__ unsigned d_matrix_flat[5184];
