@@ -53,4 +53,6 @@ __global__ void histogram_private_kernel(unsigned *bins, unsigned num_elements, 
 
 __global__ void setup_kernel ( curandState * state, unsigned long seed);
 
+__global__ void generate(curandState* globalState, unsigned char* randomArray, unsigned rank);
+
 #endif

@@ -127,6 +127,14 @@ int main(int argc, char * argv[]) {
       unsigned char* d_MatG;             // MatG flattened
       unsigned int *d_Bins;
 
+      //-------------------------cuRand stuff--------------------------------------
+      curandState* devStates;
+      unsigned char* devRandomValues;
+      cudaMalloc((void **)&devStates, N * sizeof(curandState));
+      cudaMalloc((void **)&devRandomValues, N * sizeof(unsigned char));
+
+
+
       //-------------------------Intermediate data structures-------------------------
       unsigned* rowRanks;        // list of codewords widths
       unsigned** data_matrix;    // matrix of codewords on the host
@@ -329,10 +337,20 @@ int main(int argc, char * argv[]) {
             //
             memset(h_bit_stream, 0, rank * sizeof(unsigned char));
 
+            setup_kernel<<<BlockDim1,GridDim1>>>(devStates, time(NULL));
+
+            generate<<<BlockDim1, GridDim1>>>(devStates, devRandomValues, rank);
+
+            cudaMemcpy(h_bit_stream, devRandomValues, N * sizeof(unsigned char), cudaMemcpyDeviceToHost);
             // randomly gerenates a uniform distribution of 0s and 1s
-            for (unsigned k = rank; k < N; k++) {
-               h_bit_stream[k] = (unsigned char)floor(dist(e2) * 2);
+            //for (unsigned k = rank; k < N; k++) {
+              // h_bit_stream[k] = (unsigned char)floor(dist(e2) * 2);
+            //}
+
+            for(int c = 0; c < N; c++){
+               printf("%u", h_bit_stream[c]);
             }
+            printf("\n\n\n");
 
 
             //replace that super long loop
@@ -462,6 +480,8 @@ int main(int argc, char * argv[]) {
       cudaFree(d_messageRecieved);
       cudaFree(d_decoded);
       cudaFree(d_Bins);
+      cudaFree(devRandomValues);
+      cudaFree(devStates);
    }
    else {
       fprintf(stderr, "Usage: PGaB /Path/To/Data/File");
