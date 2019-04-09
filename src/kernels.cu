@@ -340,7 +340,7 @@ __global__ void histogram_private_kernel(unsigned *bins, unsigned num_elements, 
    }
 }
 
-__global__ void setup_kernel ( curandState* state, unsigned long seed ){
+__global__ void setup_kernel (curandState* state, unsigned long seed){
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     curand_init ( seed, idx, 0, &state[idx] );
 } 
@@ -348,9 +348,11 @@ __global__ void setup_kernel ( curandState* state, unsigned long seed ){
 __global__ void generate( curandState* globalState, unsigned char* randomArray, unsigned rank){
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     curandState localState = globalState[idx];
-   unsigned char RANDOM = curand( &localState );
-    if(idx >= rank){
-      randomArray[idx] = RANDOM % 2;
+   float RANDOM = curand_uniform(&localState) * 2;
+   unsigned char random = (unsigned char)truncf(RANDOM);
+
+   if(idx >= rank){
+      randomArray[idx] = random;
       globalState[idx] = localState;
-    }
+   }
 }
