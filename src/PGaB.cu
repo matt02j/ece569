@@ -335,23 +335,23 @@ int main(int argc, char * argv[]) {
             }
 #else
             //
-            memset(h_bit_stream, 0, rank * sizeof(unsigned char));
+            //memset(h_bit_stream, 0, rank * sizeof(unsigned char));
 
-            //generate<<<BlockDim1, GridDim1>>>(devStates, devRandomValues, rank);
+            generate<<<BlockDim1, GridDim1>>>(devStates, devRandomValues, rank);
 
-            //cudaMemcpy(h_bit_stream, devRandomValues, N * sizeof(unsigned char), cudaMemcpyDeviceToHost);
+            cudaMemcpy(h_bit_stream, devRandomValues, N * sizeof(unsigned char), cudaMemcpyDeviceToHost);
             //you can delete
             // randomly gerenates a uniform distribution of 0s and 1s
-            for (unsigned k = rank; k < N; k++) {
-               h_bit_stream[k] = (unsigned char)floor(dist(e2) * 2);
-            }
+            //for (unsigned k = rank; k < N; k++) {
+            //   h_bit_stream[k] = (unsigned char)floor(dist(e2) * 2);
+            //}
 
 
             //you can delete
-            /*for(int c = 0; c < N; c++){
-               printf("%u", h_bit_stream[c]);
-            }
-            printf("\n\n\n");*/
+            //for(int c = 0; c < N; c++){
+            //   printf("%u", h_bit_stream[c]);
+            //}
+            //printf("\n\n\n");
             
 
 
