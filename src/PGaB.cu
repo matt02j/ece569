@@ -335,7 +335,7 @@ int main(int argc, char * argv[]) {
             }
 #else
             //
-            //memset(h_bit_stream, 0, rank * sizeof(unsigned char));
+            memset(h_bit_stream, 0, rank * sizeof(unsigned char));
 
             generate<<<BlockDim1, GridDim1>>>(devStates, devRandomValues, rank);
 
