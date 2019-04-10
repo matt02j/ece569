@@ -18,7 +18,7 @@
 
 // for timing
 #define PROFILE 
-
+ 
 //for open mp
 //#define OMP
 
@@ -31,7 +31,7 @@
 // Print out everything were doing
 #define VERBOSE
 
-#define NUMSTREAMS 2
+#define NUMSTREAMS 4
 
 #include <cuda.h>
 

@@ -289,7 +289,6 @@ __global__ void NestedFor(unsigned char* MatG_D, unsigned char* U_D, unsigned k,
 	for(int i=threadIdx.x; i<N; i+=blockDim.x){
 		U_D[i]=u[i];
 	}
-
 }
 
 __global__ void histogram_private_kernel(unsigned *bins, unsigned num_elements, unsigned num_bins){
