@@ -337,3 +337,21 @@ __global__ void histogram_private_kernel(unsigned *bins, unsigned num_elements, 
       atomicAdd(&(bins[j]), boxs[j]);
    }
 }
+
+__global__ void setup_kernel (curandState* state, unsigned long seed){
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    curand_init ( seed, idx, 0, &state[idx] );
+} 
+
+__global__ void generate( curandState* globalState, unsigned char* randomArray, unsigned rank){
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    curandState localState = globalState[idx];
+   float RANDOM = curand_uniform(&localState);
+   RANDOM *= 1.999999; //https://stackoverflow.com/questions/18501081/generating-random-number-within-cuda-kernel-in-a-varying-range
+   unsigned char random = (unsigned char)truncf(RANDOM);
+
+   if(idx >= rank){
+      randomArray[idx] = random;
+      globalState[idx] = localState;
+   }
+}

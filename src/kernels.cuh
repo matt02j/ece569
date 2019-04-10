@@ -17,6 +17,7 @@
 #define KERNELS_H
 
 #include "const.cuh"
+#include <curand_kernel.h>
 
 #ifdef __linux
 extern __constant__ unsigned d_matrix_flat[5184];
@@ -49,5 +50,9 @@ __global__ void ComputeSyndrome(unsigned char * Synd, unsigned char* Decide, uns
 __global__ void NestedFor(unsigned char* MatG_D, unsigned char* U_D, unsigned k, unsigned N);
 
 __global__ void histogram_private_kernel(unsigned *bins, unsigned num_elements, unsigned num_bins);
+
+__global__ void setup_kernel ( curandState * state, unsigned long seed);
+
+__global__ void generate(curandState* globalState, unsigned char* randomArray, unsigned rank);
 
 #endif

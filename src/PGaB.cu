@@ -343,6 +343,14 @@ int main(int argc, char * argv[]) {
       // copy h_MatG_flat to device only once
       cudaMemcpyAsync(d_MatG, h_MatG_flat, M * N * sizeof(unsigned char), cudaMemcpyHostToDevice);
 
+      //-------------------------cuRand stuff--------------------------------------
+      curandState* devStates;
+      unsigned char* devRandomValues;
+      cudaMalloc((void **)&devStates, N * M * sizeof(curandState));
+      cudaMalloc((void **)&devRandomValues, N * sizeof(unsigned char));
+      setup_kernel<<<BlockDim1,GridDim1>>>(devStates, time(NULL));
+
+
       // loop from alpha max to alpha min (increasing noise)
       for (alpha = alpha_max; alpha >= alpha_min; alpha -= alpha_step) {
 
@@ -375,10 +383,22 @@ int main(int argc, char * argv[]) {
             //
             memset(h_bit_stream, 0, rank * sizeof(unsigned char));
 
+            generate<<<BlockDim1, GridDim1>>>(devStates, devRandomValues, rank);
+
+            cudaMemcpy(h_bit_stream, devRandomValues, N * sizeof(unsigned char), cudaMemcpyDeviceToHost);
+            //you can delete
             // randomly gerenates a uniform distribution of 0s and 1s
-            for (unsigned k = rank; k < N; k++) {
-               h_bit_stream[k] = (unsigned char)floor(dist(e2) * 2);
-            }
+            //for (unsigned k = rank; k < N; k++) {
+            //   h_bit_stream[k] = (unsigned char)floor(dist(e2) * 2);
+            //}
+
+
+            //you can delete
+            //for(int c = 0; c < N; c++){
+            //   printf("%u", h_bit_stream[c]);
+            //}
+            //printf("\n\n\n");
+            
 
             //replace that super long loop
             cudaMemcpyAsync(d_bit_stream, h_bit_stream, N * sizeof(unsigned char), cudaMemcpyHostToDevice,s1);
@@ -601,6 +621,8 @@ int main(int argc, char * argv[]) {
 	cudaFreeHost(h_VtoC1);
 	cudaFreeHost(h_decoded1);
 	cudaFreeHost(h_messageRecieved1);
+      cudaFree(devRandomValues);
+      cudaFree(devStates);
    }
    else {
       fprintf(stderr, "Usage: PGaB /Path/To/Data/File");
