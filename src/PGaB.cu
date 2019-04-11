@@ -106,8 +106,6 @@ int main(int argc, char * argv[]) {
       //-------------------------Host memory structures-------------------------
       unsigned* h_matrix_flat;      // unrolled matrix
       unsigned* h_interleaver;      // ...
-      //unsigned char* h_CtoV;                  // ...
-      //unsigned char* h_VtoC;                  // ...
       //unsigned char* h_messageRecieved;  // message after bit-flipping noise is applied
       //unsigned char* h_decoded;          // message decoded
       //unsigned char* h_synd;                  // ...
@@ -117,8 +115,6 @@ int main(int argc, char * argv[]) {
       unsigned bin_size = 0;
 	cudaStream_t streams[NUMSTREAMS];
 	//cudaEvent_t start1, stop1, start2, stop2;
-	unsigned char* h_CtoV[NUMSTREAMS];                  // ...
-	unsigned char* h_VtoC[NUMSTREAMS];                  // ...
 	unsigned char* h_messageRecieved[NUMSTREAMS];  // message after bit-flipping noise is applied
 	unsigned char* h_decoded[NUMSTREAMS];          // message decoded
 	unsigned char* h_synd[NUMSTREAMS];                  // ...
@@ -224,8 +220,6 @@ int main(int argc, char * argv[]) {
 	//cudaEventCreate( &start2);
 	for(int s=0;s<NUMSTREAMS;s++){
 		cudaStreamCreate( &streams[s] );
-		cudaMallocHost((void**)&h_CtoV[s],num_branches*sizeof(unsigned char));
-		cudaMallocHost((void**)&h_VtoC[s],num_branches*sizeof(unsigned char));
 		cudaMallocHost((void**)&h_messageRecieved[s],N*sizeof(unsigned char));
 		cudaMallocHost((void**)&h_decoded[s],N*sizeof(unsigned char));
 		cudaMallocHost((void**)&h_synd[s],M*sizeof(unsigned char));
@@ -336,9 +330,7 @@ int main(int argc, char * argv[]) {
 
       //-------------------------cuRand stuff--------------------------------------
       curandState* devStates;
-      unsigned char* devRandomValues;
       cudaMalloc((void **)&devStates, N * M * sizeof(curandState));
-      //cudaMalloc((void **)&devRandomValues, N * sizeof(unsigned char));
       setup_kernel<<<BlockDim1,GridDim1>>>(devStates, time(NULL));
 
 
@@ -355,8 +347,8 @@ int main(int argc, char * argv[]) {
 
 	for(int s=0;s<NUMSTREAMS;s++){
          //these are both all 0s?  // change to cuda memset
-        	cudaMemcpyAsync(d_CtoV[s], h_CtoV[s], num_branches * sizeof(unsigned char), cudaMemcpyHostToDevice,streams[s]);
-        	cudaMemcpyAsync(d_VtoC[s], h_VtoC[s], num_branches * sizeof(unsigned char), cudaMemcpyHostToDevice,streams[s]);
+        	cudaMemsetAsync(d_CtoV[s], 0, num_branches * sizeof(unsigned char),streams[s]);
+        	cudaMemsetAsync(d_VtoC[s], 0, num_branches * sizeof(unsigned char),streams[s]);
 	}
 
          frames_tested = 0;
@@ -506,7 +498,6 @@ int main(int argc, char * argv[]) {
 
       //Freeing memory on the GPU
       cudaFree(d_interleaver);
-      //cudaFree(devRandomValues);
       cudaFree(devStates);
 	for(int s=0;s<NUMSTREAMS;s++){
 	      	cudaFree(d_CtoV[s]);
@@ -518,8 +509,6 @@ int main(int argc, char * argv[]) {
 	      	cudaFree(d_messageRecieved[s]);
 		cudaFreeHost(h_bit_stream[s]);
 		cudaFreeHost(h_synd[s]);
-		cudaFreeHost(h_CtoV[s]);
-		cudaFreeHost(h_VtoC[s]);
 		cudaFreeHost(h_decoded[s]);
 		cudaFreeHost(h_messageRecieved[s]);
 	}
