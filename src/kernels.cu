@@ -342,14 +342,14 @@ __global__ void setup_kernel (curandState* state, unsigned long seed){
     curand_init ( seed, idx, 0, &state[idx] );
 } 
 
-__global__ void generate( curandState* globalState, unsigned char* randomArray, unsigned rank){
+__global__ void generate( curandState* globalState, unsigned char* randomArray, unsigned rank, unsigned N){
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     curandState localState = globalState[idx];
    float RANDOM = curand_uniform(&localState);
    RANDOM *= 1.999999; //https://stackoverflow.com/questions/18501081/generating-random-number-within-cuda-kernel-in-a-varying-range
    unsigned char random = (unsigned char)truncf(RANDOM);
 
-   if(idx >= rank){
+   if(idx >= rank && idx < N){
       randomArray[idx] = random;
       globalState[idx] = localState;
    }

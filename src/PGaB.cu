@@ -367,7 +367,7 @@ int main(int argc, char * argv[]) {
 		for(int s=0;s<NUMSTREAMS;s++){
            	 cudaMemsetAsync(d_bit_stream[s], 0, rank * sizeof(unsigned char),streams[s]);
 
-           	 generate<<<BlockDim1, GridDim1,0,streams[s]>>>(devStates, d_bit_stream[s], rank);
+           	 generate<<<BlockDim1, GridDim1,0,streams[s]>>>(devStates, d_bit_stream[s], rank, N);
 
             //cudaMemcpy(h_bit_stream, devRandomValues, N * sizeof(unsigned char), cudaMemcpyDeviceToHost);
 
