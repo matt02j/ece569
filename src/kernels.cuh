@@ -55,4 +55,6 @@ __global__ void setup_kernel ( curandState * state, unsigned long seed);
 
 __global__ void generate(curandState* globalState, unsigned char* randomArray, unsigned rank, unsigned N);
 
+__global__ void simulateChannel(unsigned char* d_bit_stream, unsigned char* d_messageRecieved, unsigned* d_PermG, unsigned N);
+
 #endif

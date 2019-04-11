@@ -354,3 +354,10 @@ __global__ void generate( curandState* globalState, unsigned char* randomArray, 
       globalState[idx] = localState;
    }
 }
+__global__ void simulateChannel(unsigned char* d_bit_stream, unsigned char* d_messageRecieved, unsigned* d_PermG, unsigned N){
+   int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+   if(idx < N){
+      d_messageRecieved[d_PermG[idx]] = d_bit_stream[idx];
+   }
+}
