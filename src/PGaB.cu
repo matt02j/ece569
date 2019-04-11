@@ -346,7 +346,7 @@ int main(int argc, char * argv[]) {
          err_count = 0;
 
 	for(int s=0;s<NUMSTREAMS;s++){
-         //these are both all 0s?  // change to cuda memset
+         //these are both all 0s
         	cudaMemsetAsync(d_CtoV[s], 0, num_branches * sizeof(unsigned char),streams[s]);
         	cudaMemsetAsync(d_VtoC[s], 0, num_branches * sizeof(unsigned char),streams[s]);
 	}
@@ -500,13 +500,13 @@ int main(int argc, char * argv[]) {
       cudaFree(d_interleaver);
       cudaFree(devStates);
 	for(int s=0;s<NUMSTREAMS;s++){
-	      	cudaFree(d_CtoV[s]);
+	      cudaFree(d_CtoV[s]);
 	     	cudaFree(d_VtoC[s]);
 	    	cudaFree(d_decoded[s]);
-	      	cudaFree(d_CtoV[s]);
-	      	cudaFree(d_VtoC[s]);
-	      	cudaFree(d_synd[s]);
-	      	cudaFree(d_messageRecieved[s]);
+	      cudaFree(d_CtoV[s]);
+	      cudaFree(d_VtoC[s]);
+	      cudaFree(d_synd[s]);
+	      cudaFree(d_messageRecieved[s]);
 		cudaFreeHost(h_bit_stream[s]);
 		cudaFreeHost(h_synd[s]);
 		cudaFreeHost(h_decoded[s]);
