@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Created By        : Adithya Madhava Rao, Harshil Pankaj Kakaiya, Priyanka Devashish Goswami
-// Modified By       : Matt <LastName>, Jeremy Seers, Sebastian Thiem
+// Modified By       : Matthew Johnson, Jeremy Sears, Sebastian Thiem
 //                   :
 // Organization:     : The University of Arizona
 //                   :
