@@ -14,7 +14,7 @@
 //                   :
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 #ifndef CONST_H
-#define CONST_H 
+#define CONST_H  
 
 // for timing
 #define PROFILE 
@@ -32,7 +32,7 @@
 #define VERBOSE
 
 #define NUMSTREAMS 4
-
+#define BATCHSIZE 1
 #include <cuda.h>
 
 #ifndef __linux
@@ -45,7 +45,7 @@
 #include <stdlib.h>
 //#include <unistd.h>
 #include <string.h>
-#include <stdio.h>
+#include <stdio.h> 
 
 #define arrondi(x)((ceil(x) - x) < (x - floor(x)) ? (int) ceil(x) : (int) floor(x))
 #define min(x, y)((x) < (y) ? (x) : (y))

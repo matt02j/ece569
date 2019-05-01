@@ -298,7 +298,7 @@ void print_array_int(int* arr, int size){
 	}
 	printf("\n");
 }
-void print_array_char(char* arr, int size){
+void print_array_char(unsigned char* arr, int size){
 	for(int i=0; i<size; i++){
 		printf("%d ",arr[i]);
 	}

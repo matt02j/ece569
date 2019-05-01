@@ -125,7 +125,8 @@ int main(int argc, char * argv[]) {
 	unsigned char* d_decoded[NUMSTREAMS];          // message decoded
 	unsigned char* d_synd[NUMSTREAMS];                  // ...
 	unsigned char* d_bit_stream[NUMSTREAMS];       // Randomly generated bit stream
-	unsigned* message[NUMSTREAMS];         // test message {0,1,0,0,1,0,...} 
+	unsigned char* message[NUMSTREAMS];         // test message {0,1,0,0,1,0,...} 
+	unsigned char* d_varr[NUMSTREAMS];
 
       //-------------------------Device memory structures-------------------------
       // unsigned* d_matrix_flat;      // held as global in constant memory
@@ -154,7 +155,7 @@ int main(int argc, char * argv[]) {
       dim3 GridDim2((M - 1) / BLOCK_DIM_2 + 1, 1);
       dim3 BlockDim2(BLOCK_DIM_2);
       dim3 NestedBlock(1024);
-      dim3 NestedGrid(1);
+      dim3 NestedGrid(BATCHSIZE);
 
 #ifdef VERBOSE
       std::cout << "Reading in test data...";
@@ -219,17 +220,18 @@ int main(int argc, char * argv[]) {
 	//cudaEventCreate( &start2);
 	for(int s=0;s<NUMSTREAMS;s++){
 		cudaStreamCreate( &streams[s] );
-		cudaMallocHost((void**)&h_messageRecieved[s],N*sizeof(unsigned char));
-		cudaMallocHost((void**)&h_decoded[s],N*sizeof(unsigned char));
-		cudaMallocHost((void**)&h_synd[s],M*sizeof(unsigned char));
-		cudaMallocHost((void**)&h_bit_stream[s],N*sizeof(unsigned char));
-	     	cudaMalloc((void**)&d_synd[s], M * sizeof(unsigned char));
-	      	cudaMalloc((void**)&d_CtoV[s], num_branches * sizeof(unsigned char));
-	     	cudaMalloc((void**)&d_VtoC[s], num_branches * sizeof(unsigned char));
-	     	cudaMalloc((void**)&d_messageRecieved[s], N * sizeof(unsigned char));
-	      	cudaMalloc((void**)&d_decoded[s], N * sizeof(unsigned char));
-	      	cudaMalloc((void **)&d_bit_stream[s], N * sizeof(unsigned char));
-		message[s] = (unsigned *)calloc(N, sizeof(unsigned));
+		cudaMallocHost((void**)&h_messageRecieved[s],N*sizeof(unsigned char)*BATCHSIZE);
+		cudaMallocHost((void**)&h_decoded[s],N*sizeof(unsigned char)*BATCHSIZE);
+		cudaMallocHost((void**)&h_synd[s],M*sizeof(unsigned char)*BATCHSIZE);
+		cudaMallocHost((void**)&h_bit_stream[s],N*sizeof(unsigned char)*BATCHSIZE);
+	     	cudaMalloc((void**)&d_synd[s], M * sizeof(unsigned char)*BATCHSIZE);
+	      	cudaMalloc((void**)&d_CtoV[s], num_branches * sizeof(unsigned char)*BATCHSIZE);
+	     	cudaMalloc((void**)&d_VtoC[s], num_branches * sizeof(unsigned char)*BATCHSIZE);
+	     	cudaMalloc((void**)&d_messageRecieved[s], N * sizeof(unsigned char)*BATCHSIZE);
+	      	cudaMalloc((void**)&d_decoded[s], N * sizeof(unsigned char)*BATCHSIZE);
+	      	cudaMalloc((void **)&d_bit_stream[s], N * sizeof(unsigned char)*BATCHSIZE);
+		message[s] = (unsigned char*)calloc(N, sizeof(unsigned char)*BATCHSIZE);
+		cudaMalloc((void**)&d_varr[s],N*sizeof(unsigned char));
 	}
       //message = (unsigned *)calloc(N, sizeof(unsigned));
 
@@ -335,7 +337,6 @@ int main(int argc, char * argv[]) {
 
       // loop from alpha max to alpha min (increasing noise)
       for (alpha = alpha_max; alpha >= alpha_min; alpha -= alpha_step) {
-
             NiterMoy = 0;
             NiterMax = 0;
             Dmin = 1e5;
@@ -346,17 +347,17 @@ int main(int argc, char * argv[]) {
 
             for(int s=0;s<NUMSTREAMS;s++){
             //these are both all 0s
-                  cudaMemsetAsync(d_CtoV[s], 0, num_branches * sizeof(unsigned char),streams[s]);
-                  cudaMemsetAsync(d_VtoC[s], 0, num_branches * sizeof(unsigned char),streams[s]);
+                  cudaMemsetAsync(d_CtoV[s], 0, num_branches * sizeof(unsigned char)*BATCHSIZE,streams[s]);
+                  cudaMemsetAsync(d_VtoC[s], 0, num_branches * sizeof(unsigned char)*BATCHSIZE,streams[s]);
             }
 
             frames_tested = 0;
             unsigned nb = 0;
-            while (nb < NbMonteCarlo && err_total_count != frame_count) {
+            while (nb < NbMonteCarlo && err_total_count < frame_count) {
 
             //--------------------------------------------Encode--------------------------------------------
 		for(int s=0;s<NUMSTREAMS;s++){
-           	 cudaMemsetAsync(d_bit_stream[s], 0, rank * sizeof(unsigned char),streams[s]);
+           	 cudaMemsetAsync(d_bit_stream[s], 0, N * sizeof(unsigned char)*BATCHSIZE,streams[s]);
 
            	 generate<<<BlockDim1, GridDim1,0,streams[s]>>>(devStates, d_bit_stream[s], rank, N);
 
@@ -370,14 +371,14 @@ int main(int argc, char * argv[]) {
 		    //replace that super long loop
 		    //cudaMemcpyAsync(d_bit_stream[s], h_bit_stream[s], N * sizeof(unsigned char), cudaMemcpyHostToDevice,streams[s]);
 		    NestedFor <<<NestedGrid, NestedBlock, N * sizeof(unsigned char),streams[s] >>>(d_MatG, d_bit_stream[s], rank - 1, N);
-		    cudaMemcpyAsync(h_bit_stream[s], d_bit_stream[s], N * sizeof(unsigned char), cudaMemcpyDeviceToHost,streams[s]);
+		   // cudaMemcpyAsync(h_bit_stream[s], d_bit_stream[s], N * sizeof(unsigned char)*BATCHSIZE, cudaMemcpyDeviceToHost,streams[s]); 
             }
             for(int s=0;s<NUMSTREAMS;s++){
                   cudaStreamSynchronize(streams[s]);
                   
                   simulateChannel<<<GridDim1, BlockDim1, 0, streams[s]>>>(d_bit_stream[s], d_messageRecieved[s], d_PermG, N);
 
-                  cudaMemcpyAsync(message[s], d_messageRecieved[s], N * sizeof(unsigned), cudaMemcpyDeviceToHost);
+                  cudaMemcpyAsync(message[s], d_messageRecieved[s], N * sizeof(unsigned char)*BATCHSIZE, cudaMemcpyDeviceToHost);
                   //for (unsigned k = 0; k < N; k++) {
                   //      message[s][PermG[k]] = h_bit_stream[s][k];
                   //}
@@ -385,27 +386,29 @@ int main(int argc, char * argv[]) {
                   //---------------------------------------Simulate Channel---------------------------------------
 
                   // Flip the bits with the alpha percentage (noise over channel)
-                  for (unsigned n = 0; n < N; n++) {
-                        if (dist(e2) < alpha) {
-                              h_messageRecieved[s][n] = 1 - message[s][n];
-                        }
-                        else {
-                              h_messageRecieved[s][n] = message[s][n];
-                        }
+			
+		 for(int i=0;i<BATCHSIZE;i++){
+                  	for (unsigned n = 0; n < N; n++) {
+		                if (dist(e2) < alpha) {
+		                      h_messageRecieved[s][i*N+n] = 1 - message[s][i*N+n];
+		                }
+		                else {
+		                      h_messageRecieved[s][i*N+n] = message[s][i*N+n];
+		                }
+			}
                   }
             
                   //-----------------------------------------------Decode-----------------------------------------------
 
-                  cudaMemcpyAsync(d_messageRecieved[s], h_messageRecieved[s], N * sizeof(unsigned char), cudaMemcpyHostToDevice,streams[s]);
-      
+                  cudaMemcpyAsync(d_messageRecieved[s], h_messageRecieved[s], N * sizeof(unsigned char)*BATCHSIZE, cudaMemcpyHostToDevice,streams[s]);
             } 
             unsigned itter = 0;
 		unsigned it[NUMSTREAMS]={0};
-            bool hasConverged[NUMSTREAMS] = {false};
-
+            bool hasConverged[NUMSTREAMS][BATCHSIZE] = {{false}};
+		bool hasConvergedStream[NUMSTREAMS]={false};
             while (itter < itteration_count) {
                   for(int s=0;s<NUMSTREAMS;s++){
-                        if(!hasConverged[s]){
+                        if(!hasConvergedStream[s]){
                               // Different itterations have different kernels
                               if (itter == 0) {
                                     DataPassGB_0<<<GridDim1,BlockDim1,0,streams[s]>>> (d_VtoC[s], d_messageRecieved[s], d_interleaver, N, num_branches);
@@ -415,27 +418,33 @@ int main(int argc, char * argv[]) {
                                                 (d_VtoC[s],d_CtoV[s],d_messageRecieved[s],d_interleaver,N,num_branches);
                               }
                               else {
-                                    DataPassGB_2<<<GridDim1,BlockDim1,0,streams[s]>>>(d_VtoC[s], d_CtoV[s], d_messageRecieved[s], d_interleaver, N, num_branches, varr);
+           	 			generate2<<<BlockDim1, GridDim1,0,streams[s]>>>(devStates, d_varr[s], N);
+                                    DataPassGB_2<<<GridDim1,BlockDim1,0,streams[s]>>>(d_VtoC[s], d_CtoV[s], d_messageRecieved[s], d_interleaver, N, num_branches, d_varr[s]);
                               }
                               CheckPassGB<<<GridDim2,BlockDim2,num_branches * sizeof(unsigned char),streams[s]>>>(d_CtoV[s], d_VtoC[s], M, num_branches);
 
                               APP_GB<<<GridDim1,BlockDim1,0,streams[s]>>>(d_decoded[s],d_CtoV[s], d_messageRecieved[s], d_interleaver, N, num_branches);
                               
                               ComputeSyndrome<<<GridDim2, BlockDim2, N * sizeof(unsigned char),streams[s]>>>(d_synd[s], d_decoded[s], M, num_branches, N);
-                              cudaMemcpyAsync(h_synd[s], d_synd[s], M * sizeof(unsigned char), cudaMemcpyDeviceToHost,streams[s]);
+                              cudaMemcpyAsync(h_synd[s], d_synd[s], M * sizeof(unsigned char)*BATCHSIZE, cudaMemcpyDeviceToHost,streams[s]);
                         }
                   }    
                   for(int s=0;s<NUMSTREAMS;s++){
-                        if(!hasConverged[s]){
+			
+                        if(!hasConvergedStream[s]){
                               // check for convergence
                               cudaStreamSynchronize(streams[s]);
-                              hasConverged[s] = true;
-                              for (unsigned kk = 0; kk < M; kk++) {
-                                    if (h_synd[s][kk] == 1) {
-                                          hasConverged[s] = false;
-                                    break;
-                                    }
-                              }
+				hasConvergedStream[s]=true;
+				for(int b=0;b<BATCHSIZE;b++){
+		                      hasConverged[s][b] = true;
+		                      for (unsigned kk = 0; kk < M; kk++) {
+		                            if (h_synd[s][kk+M*b] == 1) {
+		                                  hasConverged[s][b] = false;
+						hasConvergedStream[s]=false;
+		                            break;
+		                            }
+		                      }
+				}
                               it[s]++;
                         }
                   }
@@ -444,41 +453,44 @@ int main(int argc, char * argv[]) {
 
 
 		for(int s=0;s<NUMSTREAMS;s++){
-		    cudaMemcpyAsync(h_decoded[s], d_decoded[s], N * sizeof(unsigned char), cudaMemcpyDeviceToHost,streams[s]);
+		    cudaMemcpyAsync(h_decoded[s], d_decoded[s], N * sizeof(unsigned char)*BATCHSIZE, cudaMemcpyDeviceToHost,streams[s]);
 		}
 		    //============================================================================
 		    // Compute Statistics
 		    //============================================================================
-		    frames_tested+=NUMSTREAMS;
-		for(int s=0;s<NUMSTREAMS;s++){
-		    err_count = 0;
-			cudaStreamSynchronize(streams[s]);
-		    // Calculate bit errors
-		    for (unsigned k = 0; k < N; k++) {
-		       if (h_decoded[s][k] != message[s][k]) { 
-		          err_count++;
-		       }
-		    }
-		    bit_error_count += err_count;
+		    frames_tested+=(NUMSTREAMS*BATCHSIZE);
 
-		    // Case Divergence
-		    if (!hasConverged[s]) {
-		       NiterMoy = NiterMoy + itteration_count;
-		       err_total_count++;
-		    }
-		    // Case Convergence to Right message
-		    else if (err_count == 0) {
-		       NiterMax = max(NiterMax, it[s] + 1);
-		       NiterMoy = NiterMoy + (it[s] + 1);
-		    }
-		   // Case Convergence to Wrong message
-		    else{
-		       NiterMax = max(NiterMax, it[s] + 1);
-		       NiterMoy = NiterMoy + (it[s] + 1);
-		       err_total_count++;
-		       missed_error_count++;
-		       Dmin = min(Dmin, err_count);
-		    }
+		for(int s=0;s<NUMSTREAMS;s++){
+			cudaStreamSynchronize(streams[s]);
+			for(int b=0;b<BATCHSIZE;b++){
+		    		err_count = 0;
+			    // Calculate bit errors
+			    for (unsigned k = 0; k < N; k++) {
+			       if (h_decoded[s][(N*b)+k] != message[s][(N*b)+k]) { 
+				  err_count++;
+			       }
+			    }
+			    bit_error_count += err_count;
+
+			    // Case Divergence
+			    if (!hasConverged[s][b]) {
+			       NiterMoy = NiterMoy + itteration_count;
+			       err_total_count++;
+			    }
+			    // Case Convergence to Right message
+			    else if (err_count == 0) {
+			       NiterMax = max(NiterMax, it[s] + 1);
+			       NiterMoy = NiterMoy + (it[s] + 1);
+			    }
+			   // Case Convergence to Wrong message
+			    else{
+			       NiterMax = max(NiterMax, it[s] + 1);
+			       NiterMoy = NiterMoy + (it[s] + 1);
+			       err_total_count++;
+			       missed_error_count++;
+			       Dmin = min(Dmin, err_count);
+			    }
+			}
 		}
 
             nb++;
