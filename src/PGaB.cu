@@ -266,6 +266,7 @@ int main(int argc, char * argv[]) {
 
       // free no longer needed structures
       cudaFree(hist);
+      cudaFree(d_Bins);
 
       // init permutation matrix
       for (unsigned n = 0; n < N; n++) {
@@ -502,6 +503,8 @@ int main(int argc, char * argv[]) {
       //Freeing memory on the GPU
       cudaFree(d_interleaver);
       cudaFree(devStates);
+      cudaFree(d_MatG);
+      cudaFree(d_PermG);
 	for(int s=0;s<NUMSTREAMS;s++){
 	      cudaFree(d_CtoV[s]);
 	     	cudaFree(d_VtoC[s]);
@@ -509,16 +512,20 @@ int main(int argc, char * argv[]) {
 	      cudaFree(d_CtoV[s]);
 	      cudaFree(d_VtoC[s]);
             cudaFree(d_synd[s]);
-            cudaFree(d_PermG);
+            cudaFree(d_bit_stream[s]);
 	      cudaFree(d_messageRecieved[s]);
 		cudaFreeHost(h_bit_stream[s]);
 		cudaFreeHost(h_synd[s]);
-		cudaFreeHost(h_decoded[s]);
+            cudaFreeHost(h_decoded[s]);
 		cudaFreeHost(h_messageRecieved[s]);
 	}
    }
    else {
       fprintf(stderr, "Usage: PGaB /Path/To/Data/File");
    }
+   free(h_matrix_flat);
+   free(h_interleaver);
+   free(h_MatG_flat);
+
    return 0;
 }
