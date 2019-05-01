@@ -253,7 +253,7 @@ int main(int argc, char * argv[]) {
       // Copying contents from the host to the device
 
       cudaMemcpyToSymbol(d_matrix_flat, h_matrix_flat, num_branches * sizeof(unsigned));
- 
+      free(h_matrix_flat);
       // generate histogram on the data matrix
 
       histogram_private_kernel<<<GridDim1, BlockDim1,N * sizeof(unsigned int)>>>(d_Bins, num_branches, N);
@@ -263,6 +263,7 @@ int main(int argc, char * argv[]) {
       initInterleaved(h_interleaver, data_matrix, rowRanks, hist, M, N);
       cudaMemcpy(d_interleaver, h_interleaver, num_branches * sizeof(unsigned), cudaMemcpyHostToDevice);
 
+      cudaFree(h_interleaver);
 
       // free no longer needed structures
       cudaFree(hist);
@@ -327,7 +328,7 @@ int main(int argc, char * argv[]) {
 
       // copy h_MatG_flat to device only once
       cudaMemcpyAsync(d_MatG, h_MatG_flat, M * N * sizeof(unsigned char), cudaMemcpyHostToDevice);
-
+      free(h_MatG_flat);
       //-------------------------cuRand stuff--------------------------------------
       curandState* devStates;
       cudaMalloc((void **)&devStates, N * M * sizeof(curandState));
@@ -523,9 +524,5 @@ int main(int argc, char * argv[]) {
    else {
       fprintf(stderr, "Usage: PGaB /Path/To/Data/File");
    }
-   free(h_matrix_flat);
-   free(h_interleaver);
-   free(h_MatG_flat);
-
    return 0;
 }
