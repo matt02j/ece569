@@ -116,7 +116,7 @@ __global__ void DataPassGB_1(unsigned char * VtoC, unsigned char * CtoV, unsigne
 // for iterations greater than 15, this kernel launches to pass the message from variables nodes onto the four 
 // check nodes it is connected to.
 //TODO CtoV shared and Interleaver shared
-__global__ void DataPassGB_2(unsigned char* VtoC, unsigned char* CtoV, unsigned char* Receivedword, unsigned* Interleaver, unsigned N, unsigned num_branches, unsigned varr) {
+__global__ void DataPassGB_2(unsigned char* VtoC, unsigned char* CtoV, unsigned char* Receivedword, unsigned* Interleaver, unsigned N, unsigned num_branches, unsigned char* varr) {
    
    // calculate the current index on the grid
    unsigned id = threadIdx.x + blockIdx.x * blockDim.x;
@@ -130,7 +130,7 @@ __global__ void DataPassGB_2(unsigned char* VtoC, unsigned char* CtoV, unsigned 
       int i = Receivedword[id];
 
       // 
-      int Global = (1 - 2 * (varr ^ i));
+      int Global = (1 - 2 * (varr[id] ^ i));
 
       // 
       unsigned node_idx = 0;
@@ -353,6 +353,19 @@ __global__ void generate( curandState* globalState, unsigned char* randomArray, 
       randomArray[idx] = random;
       globalState[idx] = localState;
    }
+}
+
+__global__ void DataPassGenerate( curandState* globalState, unsigned char* randomArray, unsigned start, unsigned end){
+   int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+  if(idx >= start && idx < end){
+     curandState localState = globalState[idx];
+     float RANDOM = curand_uniform(&localState);
+     RANDOM *= 1.999999; //https://stackoverflow.com/questions/18501081/generating-random-number-within-cuda-kernel-in-a-varying-range
+     unsigned char random = RANDOM < 0.4;
+     randomArray[idx] = random;
+     globalState[idx] = localState;
+  }
 }
 __global__ void simulateChannel(unsigned char* d_bit_stream, unsigned char* d_messageRecieved, unsigned* d_PermG, unsigned N){
    int idx = blockIdx.x * blockDim.x + threadIdx.x;

@@ -125,7 +125,8 @@ int main(int argc, char * argv[]) {
 	unsigned char* d_decoded[NUMSTREAMS];          // message decoded
 	unsigned char* d_synd[NUMSTREAMS];                  // ...
 	unsigned char* d_bit_stream[NUMSTREAMS];       // Randomly generated bit stream
-	unsigned* message[NUMSTREAMS];         // test message {0,1,0,0,1,0,...} 
+      unsigned* message[NUMSTREAMS];         // test message {0,1,0,0,1,0,...} 
+      unsigned char* d_varr[NUMSTREAMS];
 
       //-------------------------Device memory structures-------------------------
       // unsigned* d_matrix_flat;      // held as global in constant memory
@@ -229,7 +230,8 @@ int main(int argc, char * argv[]) {
 	     	cudaMalloc((void**)&d_messageRecieved[s], N * sizeof(unsigned char));
 	      	cudaMalloc((void**)&d_decoded[s], N * sizeof(unsigned char));
 	      	cudaMalloc((void **)&d_bit_stream[s], N * sizeof(unsigned char));
-		message[s] = (unsigned *)calloc(N, sizeof(unsigned));
+            message[s] = (unsigned *)calloc(N, sizeof(unsigned));
+            cudaMalloc((void **)&d_varr[s], N * sizeof(unsigned char));
 	}
       //message = (unsigned *)calloc(N, sizeof(unsigned));
 
@@ -332,7 +334,7 @@ int main(int argc, char * argv[]) {
       //-------------------------cuRand stuff--------------------------------------
       curandState* devStates;
       cudaMalloc((void **)&devStates, N * M * sizeof(curandState));
-      setup_kernel<<<BlockDim1,GridDim1>>>(devStates, time(NULL));
+      setup_kernel<<<GridDim1,BlockDim1>>>(devStates, time(NULL));
       cudaMemcpy(d_PermG, PermG, N * sizeof(unsigned), cudaMemcpyHostToDevice);
 
       // loop from alpha max to alpha min (increasing noise)
@@ -360,7 +362,7 @@ int main(int argc, char * argv[]) {
 		for(int s=0;s<NUMSTREAMS;s++){
            	 cudaMemsetAsync(d_bit_stream[s], 0, rank * sizeof(unsigned char),streams[s]);
 
-           	 generate<<<BlockDim1, GridDim1,0,streams[s]>>>(devStates, d_bit_stream[s], rank, N);
+           	 generate<<<GridDim1, BlockDim1,0,streams[s]>>>(devStates, d_bit_stream[s], rank, N);
 
             //cudaMemcpy(h_bit_stream, devRandomValues, N * sizeof(unsigned char), cudaMemcpyDeviceToHost);
 
@@ -417,7 +419,8 @@ int main(int argc, char * argv[]) {
                                                 (d_VtoC[s],d_CtoV[s],d_messageRecieved[s],d_interleaver,N,num_branches);
                               }
                               else {
-                                    DataPassGB_2<<<GridDim1,BlockDim1,0,streams[s]>>>(d_VtoC[s], d_CtoV[s], d_messageRecieved[s], d_interleaver, N, num_branches, varr);
+                                    DataPassGenerate<<<GridDim1, BlockDim1, 0, streams[s]>>>(devStates, d_varr[s], 0 , N);
+                                    DataPassGB_2<<<GridDim1,BlockDim1,0,streams[s]>>>(d_VtoC[s], d_CtoV[s], d_messageRecieved[s], d_interleaver, N, num_branches, d_varr[s]);
                               }
                               CheckPassGB<<<GridDim2,BlockDim2,num_branches * sizeof(unsigned char),streams[s]>>>(d_CtoV[s], d_VtoC[s], M, num_branches);
 
@@ -507,9 +510,10 @@ int main(int argc, char * argv[]) {
       cudaFree(d_MatG);
       cudaFree(d_PermG);
 	for(int s=0;s<NUMSTREAMS;s++){
-	      cudaFree(d_CtoV[s]);
-	     	cudaFree(d_VtoC[s]);
-	    	cudaFree(d_decoded[s]);
+            cudaFree(d_CtoV[s]);
+            cudaFree(d_VtoC[s]);
+            cudaFree(d_varr[s]); 
+            cudaFree(d_decoded[s]);
 	      cudaFree(d_CtoV[s]);
 	      cudaFree(d_VtoC[s]);
             cudaFree(d_synd[s]);
