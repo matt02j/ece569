@@ -493,7 +493,7 @@ int main(int argc, char * argv[]) {
 			}
 		}
 
-            nb++;
+            nb+= NUMSTREAMS * BATCHSIZE;
          }//frame loop
 
 #ifdef PROFILE  
