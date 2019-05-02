@@ -514,6 +514,14 @@ int main(int argc, char * argv[]) {
       //Freeing memory on the GPU
       cudaFree(d_interleaver);
       cudaFree(devStates);
+      cudaFree(d_MatG);
+      free(h_matrix_flat);
+      free(h_interleaver);
+      free(h_MatG_flat);
+      cudaFree(d_PermG);
+      cudaFree(d_Bins);
+      
+      
 	for(int s=0;s<NUMSTREAMS;s++){
 	      cudaFree(d_CtoV[s]);
 	     	cudaFree(d_VtoC[s]);
@@ -522,7 +530,7 @@ int main(int argc, char * argv[]) {
             cudaFree(d_varr[s]);
 	      cudaFree(d_VtoC[s]);
             cudaFree(d_synd[s]);
-            cudaFree(d_PermG);
+            cudaFree(d_bit_stream[s]);
 	      cudaFree(d_messageRecieved[s]);
 		cudaFreeHost(h_bit_stream[s]);
 		cudaFreeHost(h_synd[s]);
