@@ -1,7 +1,11 @@
 # ece569
 
 # Instructions to run serial code:
-
+From project folder  
+  
+1:cd project/build/  
+2:make serial  
+3:qsub run_PGaB_serial.pbs  
 
 
 # Instructions to run cuda code:
