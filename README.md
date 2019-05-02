@@ -5,7 +5,7 @@
 
 
 # Instructions to run cuda code:
-from project folder  
+From project folder  
   
 1: cd project  
 2: module load cuda91/toolkit/9.1.85   
