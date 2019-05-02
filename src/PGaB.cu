@@ -517,8 +517,9 @@ int main(int argc, char * argv[]) {
 	for(int s=0;s<NUMSTREAMS;s++){
 	      cudaFree(d_CtoV[s]);
 	     	cudaFree(d_VtoC[s]);
-	    	cudaFree(d_decoded[s]);
-	      cudaFree(d_CtoV[s]);
+            cudaFree(d_decoded[s]);
+            cudaFree(d_CtoV[s]);
+            cudaFree(d_varr[s]);
 	      cudaFree(d_VtoC[s]);
             cudaFree(d_synd[s]);
             cudaFree(d_PermG);
