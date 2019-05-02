@@ -185,9 +185,7 @@ int main(int argc, char * argv[]) {
 
       std::cout << "Allocating memory...";
 #endif
-#ifdef PROFILE 
-      gettimeofday(&start, NULL); 
-#endif
+
       //-------------------------Host Allocations-------------------------
       h_matrix_flat = (unsigned*)malloc(num_branches * sizeof(unsigned));
       h_interleaver = (unsigned*)malloc(num_branches * sizeof(unsigned));
@@ -337,6 +335,9 @@ int main(int argc, char * argv[]) {
 
       // loop from alpha max to alpha min (increasing noise)
       for (alpha = alpha_max; alpha >= alpha_min; alpha -= alpha_step) {
+            #ifdef PROFILE 
+                  gettimeofday(&start, NULL); 
+            #endif
             NiterMoy = 0;
             NiterMax = 0;
             Dmin = 1e5;
