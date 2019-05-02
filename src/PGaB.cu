@@ -88,8 +88,8 @@ int main(int argc, char * argv[]) {
 
       //-------------------------Channels probability for bit-flip-------------------------
       float alpha = 0.01;        // NOTE leave this here...
-      float alpha_max = 0.03;    // max alpha val
-      float alpha_min = 0.03;    // min alpha value
+      float alpha_max = 0.07;    // max alpha val
+      float alpha_min = 0.02;    // min alpha value
       float alpha_step = 0.01;   // step size in alpha for loop
       
       //--------------------------------Random Number Generation--------------------------------
@@ -332,7 +332,7 @@ int main(int argc, char * argv[]) {
       //-------------------------cuRand stuff--------------------------------------
       curandState* devStates;
       cudaMalloc((void **)&devStates, N * M * sizeof(curandState));
-      setup_kernel<<<BlockDim1,GridDim1>>>(devStates, time(NULL));
+      setup_kernel<<<GridDim1,BlockDim1>>>(devStates, time(NULL));
       cudaMemcpy(d_PermG, PermG, N * sizeof(unsigned), cudaMemcpyHostToDevice);
 
       // loop from alpha max to alpha min (increasing noise)
@@ -418,7 +418,7 @@ int main(int argc, char * argv[]) {
                                                 (d_VtoC[s],d_CtoV[s],d_messageRecieved[s],d_interleaver,N,num_branches);
                               }
                               else {
-           	 			generate2<<<BlockDim1, GridDim1,0,streams[s]>>>(devStates, d_varr[s], N);
+           	 			generate2<<<GridDim1, BlockDim1,0,streams[s]>>>(devStates, d_varr[s], N);
                                     DataPassGB_2<<<GridDim1,BlockDim1,0,streams[s]>>>(d_VtoC[s], d_CtoV[s], d_messageRecieved[s], d_interleaver, N, num_branches, d_varr[s]);
                               }
                               CheckPassGB<<<GridDim2,BlockDim2,num_branches * sizeof(unsigned char),streams[s]>>>(d_CtoV[s], d_VtoC[s], M, num_branches);

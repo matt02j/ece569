@@ -37,7 +37,7 @@ __global__ void DataPassGB_0(unsigned char * VtoC, unsigned char * Receivedword,
 
 	for(int b=0;b<BATCHSIZE;b++){
 		   if (id < N) { 
-		int batch_offset=b*N;
+		      int batch_offset=b*N;
 		      // 
 		      unsigned node_idx = 0;
 
@@ -76,46 +76,46 @@ __global__ void DataPassGB_1(unsigned char * VtoC, unsigned char * CtoV, unsigne
 
 	for(int b=0;b<BATCHSIZE;b++){
 	   if (id < N) { 
-	int batch_offset=b*num_branches;
-      // 
-      int buf = 0;
-
-      // 
-      int i = Receivedword[id+b*N];
-
-      // 
-      int Global = (1 - 2 * i);
-
-      // Used to index the CtoV and VtoC node arrays
-      unsigned node_idx = 0;
-
-      // 
-      unsigned strides = (num_branches / N);
-      // 
-      for (int stride = 0; stride < strides; stride++) {
-
-         // get node index from interleaver
-         node_idx = Interleaver[N*stride+id];
+	      int batch_offset=b*num_branches;
+         // 
+         int buf = 0;
 
          // 
-         Global += (-2) * CtoV[node_idx+batch_offset] + 1;
-      }
-
-      // 
-      for (int stride = 0; stride < strides; stride++) {
-
-         // get node index from interleaver
-         node_idx = Interleaver[N*stride+id];
+         int i = Receivedword[id+b*N];
 
          // 
+         int Global = (1 - 2 * i);
+
+         // Used to index the CtoV and VtoC node arrays
+         unsigned node_idx = 0;
+
          // 
-         buf = Global - ((-2) * CtoV[node_idx+batch_offset] + 1);
-         
+         unsigned strides = (num_branches / N);
          // 
-         VtoC[node_idx+batch_offset] = (buf < 0)? 1 : ((buf > 0)? 0 : i);
+         for (int stride = 0; stride < strides; stride++) {
+
+            // get node index from interleaver
+            node_idx = Interleaver[N*stride+id];
+
+            // 
+            Global += (-2) * CtoV[node_idx+batch_offset] + 1;
+         }
+
+         // 
+         for (int stride = 0; stride < strides; stride++) {
+
+            // get node index from interleaver
+            node_idx = Interleaver[N*stride+id];
+
+            // 
+            // 
+            buf = Global - ((-2) * CtoV[node_idx+batch_offset] + 1);
+            
+            // 
+            VtoC[node_idx+batch_offset] = (buf < 0)? 1 : ((buf > 0)? 0 : i);
+         }
       }
    }
-}
 }
 
 // for iterations greater than 15, this kernel launches to pass the message from variables nodes onto the four 
@@ -128,7 +128,7 @@ __global__ void DataPassGB_2(unsigned char* VtoC, unsigned char* CtoV, unsigned 
 
  	for(int b=0;b<BATCHSIZE;b++){
 	   if (id < N) { 
-		int batch_offset=b*num_branches;
+		   int batch_offset=b*num_branches;
 	      // 
 	      int buf;
 	      
@@ -146,26 +146,26 @@ __global__ void DataPassGB_2(unsigned char* VtoC, unsigned char* CtoV, unsigned 
 	      //
 	      for (int stride = 0; stride < strides; stride++) {
 
-		 // calculate node index
-		 node_idx = Interleaver[N*stride+id];
+            // calculate node index
+            node_idx = Interleaver[N*stride+id];
 
-		 Global += (-2) * CtoV[node_idx+batch_offset] + 1;
+            Global += (-2) * CtoV[node_idx+batch_offset] + 1;
 	      }
 
 	      // 
 	      for (int stride = 0; stride < strides; stride++) {
-		 
-		 // calculate node index
-		 node_idx = Interleaver[N*stride+id];
+            
+            // calculate node index
+            node_idx = Interleaver[N*stride+id];
 
-		 // 
-		 // 
-		 buf = Global - ((-2) * CtoV[node_idx+batch_offset] + 1);
+            // 
+            // 
+            buf = Global - ((-2) * CtoV[node_idx+batch_offset] + 1);
 
-		 // 
-		 VtoC[node_idx+batch_offset] = (buf < 0)? 1 : ((buf > 0)? 0 : i);
+            // 
+            VtoC[node_idx+batch_offset] = (buf < 0)? 1 : ((buf > 0)? 0 : i);
 	      }
-	}
+	   }
    }
 }
 
@@ -180,32 +180,30 @@ __global__ void CheckPassGB(unsigned char* CtoV, unsigned char* VtoC, unsigned M
   // for(int k=threadIdx.x; k<num_branches; k+=blockDim.x){
 //	vtoc[k]=VtoC[k];
    //}
+   for(int b=0;b<BATCHSIZE;b++){
+      if (id < M) { 
+      int batch_offset=b*num_branches;
+         int sign = 0;
 
-   	for(int b=0;b<BATCHSIZE;b++){
-	   if (id < M) { 
-		int batch_offset=b*num_branches;
-	      int sign = 0;
+         // For indexing the node arrays
+         unsigned node_idx = 0;
 
-	      // For indexing the node arrays
-	      unsigned node_idx = 0;
+         // 
+         unsigned strides = (num_branches / M);
+         int stride_idx =  id*strides;
+         // 
+         for (int stride = 0; stride < strides; stride++) {
 
-	      // 
-	      unsigned strides = (num_branches / M);
-	      int stride_idx =  id*strides;
-	      // 
-	      for (int stride = 0; stride < strides; stride++) {
-
-		 node_idx = stride + stride_idx;
-		 sign ^= VtoC[node_idx+batch_offset];
-	      }
-	      
-	      // 
-	      for (int stride = 0; stride < strides; stride++) {
-		 
-		 node_idx = stride + stride_idx;
-		 CtoV[node_idx+batch_offset] = sign ^ VtoC[node_idx+batch_offset];
-	      }
-  	  }
+            node_idx = stride + stride_idx;
+            sign ^= VtoC[node_idx+batch_offset];
+         }
+         
+         // 
+         for (int stride = 0; stride < strides; stride++) {
+            node_idx = stride + stride_idx;
+            CtoV[node_idx+batch_offset] = sign ^ VtoC[node_idx+batch_offset];
+         }
+      }
 	}
 }
 
@@ -257,6 +255,7 @@ __global__ void ComputeSyndrome(unsigned char * Synd, unsigned char * Decide, un
    //}
    //__syncthreads();
 	for(int b=0;b<BATCHSIZE;b++){
+      synd = 0;
 	   if (id < M) {
 	      
 	      unsigned strides = (num_branches / M);

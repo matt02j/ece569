@@ -32,7 +32,7 @@
 #define VERBOSE
 
 #define NUMSTREAMS 4
-#define BATCHSIZE 1
+#define BATCHSIZE 4
 #include <cuda.h>
 
 #ifndef __linux
