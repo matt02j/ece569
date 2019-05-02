@@ -59,6 +59,6 @@ void unrollMatrix(unsigned* unrolledMatrix, unsigned** data_matrix, const unsign
 
 
 void print_array_int(int* arr, int size);
-void print_array_char(char* arr, int size);
+void print_array_char(unsigned char* arr, int size);
 
 #endif

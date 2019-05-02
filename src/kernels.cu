@@ -34,22 +34,25 @@ __global__ void DataPassGB_0(unsigned char * VtoC, unsigned char * Receivedword,
 	}
 
 	__syncthreads();*/
-   if (id < N) { 
 
-      // 
-      unsigned node_idx = 0;
+	for(int b=0;b<BATCHSIZE;b++){
+		   if (id < N) { 
+		      int batch_offset=b*N;
+		      // 
+		      unsigned node_idx = 0;
 
-      // 
-      unsigned i = Receivedword[id];
+		      // 
+		      unsigned i = Receivedword[id+batch_offset];
 
-      for (int stride = 0; stride < strides; stride++) {
-         
-         // get node index from interleaver
-         node_idx = Interleaver[N*stride+id];
-         
-         VtoC[node_idx] = i;
-      }
-   }
+		      for (int stride = 0; stride < strides; stride++) {
+			 
+			 // get node index from interleaver
+			 node_idx = Interleaver[N*stride+id];
+			 
+			 VtoC[node_idx+b*num_branches] = i;
+		      }
+		   }
+	}
 }
 
 // for iterations between 1 and 15, this kernel launches to pass the message from variables nodes onto 
@@ -71,44 +74,46 @@ __global__ void DataPassGB_1(unsigned char * VtoC, unsigned char * CtoV, unsigne
 
 	__syncthreads();*/
 
-   if (id < N) {
-
-      // 
-      int buf = 0;
-
-      // 
-      int i = Receivedword[id];
-
-      // 
-      int Global = (1 - 2 * i);
-
-      // Used to index the CtoV and VtoC node arrays
-      unsigned node_idx = 0;
-
-      // 
-      unsigned strides = (num_branches / N);
-      // 
-      for (int stride = 0; stride < strides; stride++) {
-
-         // get node index from interleaver
-         node_idx = Interleaver[N*stride+id];
+	for(int b=0;b<BATCHSIZE;b++){
+	   if (id < N) { 
+	      int batch_offset=b*num_branches;
+         // 
+         int buf = 0;
 
          // 
-         Global += (-2) * CtoV[node_idx] + 1;
-      }
-
-      // 
-      for (int stride = 0; stride < strides; stride++) {
-
-         // get node index from interleaver
-         node_idx = Interleaver[N*stride+id];
+         int i = Receivedword[id+b*N];
 
          // 
+         int Global = (1 - 2 * i);
+
+         // Used to index the CtoV and VtoC node arrays
+         unsigned node_idx = 0;
+
          // 
-         buf = Global - ((-2) * CtoV[node_idx] + 1);
-         
+         unsigned strides = (num_branches / N);
          // 
-         VtoC[node_idx] = (buf < 0)? 1 : ((buf > 0)? 0 : i);
+         for (int stride = 0; stride < strides; stride++) {
+
+            // get node index from interleaver
+            node_idx = Interleaver[N*stride+id];
+
+            // 
+            Global += (-2) * CtoV[node_idx+batch_offset] + 1;
+         }
+
+         // 
+         for (int stride = 0; stride < strides; stride++) {
+
+            // get node index from interleaver
+            node_idx = Interleaver[N*stride+id];
+
+            // 
+            // 
+            buf = Global - ((-2) * CtoV[node_idx+batch_offset] + 1);
+            
+            // 
+            VtoC[node_idx+batch_offset] = (buf < 0)? 1 : ((buf > 0)? 0 : i);
+         }
       }
    }
 }
@@ -121,44 +126,46 @@ __global__ void DataPassGB_2(unsigned char* VtoC, unsigned char* CtoV, unsigned 
    // calculate the current index on the grid
    unsigned id = threadIdx.x + blockIdx.x * blockDim.x;
 
-   if (id < N) {
+ 	for(int b=0;b<BATCHSIZE;b++){
+	   if (id < N) { 
+		   int batch_offset=b*num_branches;
+	      // 
+	      int buf;
+	      
+	      // 
+	      int i = Receivedword[id+b*N];
 
-      // 
-      int buf;
-      
-      // 
-      int i = Receivedword[id];
+	      // 
+	      int Global = (1 - 2 * (varr[id] ^ i));
 
-      // 
-      int Global = (1 - 2 * (varr[id] ^ i));
+	      // 
+	      unsigned node_idx = 0;
 
-      // 
-      unsigned node_idx = 0;
+	      //
+	      unsigned strides = (num_branches / N);
+	      //
+	      for (int stride = 0; stride < strides; stride++) {
 
-      //
-      unsigned strides = (num_branches / N);
-      //
-      for (int stride = 0; stride < strides; stride++) {
+            // calculate node index
+            node_idx = Interleaver[N*stride+id];
 
-         // calculate node index
-         node_idx = Interleaver[N*stride+id];
+            Global += (-2) * CtoV[node_idx+batch_offset] + 1;
+	      }
 
-         Global += (-2) * CtoV[node_idx] + 1;
-      }
+	      // 
+	      for (int stride = 0; stride < strides; stride++) {
+            
+            // calculate node index
+            node_idx = Interleaver[N*stride+id];
 
-      // 
-      for (int stride = 0; stride < strides; stride++) {
-         
-         // calculate node index
-         node_idx = Interleaver[N*stride+id];
+            // 
+            // 
+            buf = Global - ((-2) * CtoV[node_idx+batch_offset] + 1);
 
-         // 
-         // 
-         buf = Global - ((-2) * CtoV[node_idx] + 1);
-
-         // 
-         VtoC[node_idx] = (buf < 0)? 1 : ((buf > 0)? 0 : i);
-      }
+            // 
+            VtoC[node_idx+batch_offset] = (buf < 0)? 1 : ((buf > 0)? 0 : i);
+	      }
+	   }
    }
 }
 
@@ -173,31 +180,31 @@ __global__ void CheckPassGB(unsigned char* CtoV, unsigned char* VtoC, unsigned M
   // for(int k=threadIdx.x; k<num_branches; k+=blockDim.x){
 //	vtoc[k]=VtoC[k];
    //}
+   for(int b=0;b<BATCHSIZE;b++){
+      if (id < M) { 
+      int batch_offset=b*num_branches;
+         int sign = 0;
 
-   if (id < M) {
+         // For indexing the node arrays
+         unsigned node_idx = 0;
 
-      int sign = 0;
+         // 
+         unsigned strides = (num_branches / M);
+         int stride_idx =  id*strides;
+         // 
+         for (int stride = 0; stride < strides; stride++) {
 
-      // For indexing the node arrays
-      unsigned node_idx = 0;
-
-      // 
-      unsigned strides = (num_branches / M);
-      int stride_idx =  id*strides;
-      // 
-      for (int stride = 0; stride < strides; stride++) {
-
-         node_idx = stride + stride_idx;
-         sign ^= VtoC[node_idx];
-      }
-      
-      // 
-      for (int stride = 0; stride < strides; stride++) {
+            node_idx = stride + stride_idx;
+            sign ^= VtoC[node_idx+batch_offset];
+         }
          
-         node_idx = stride + stride_idx;
-         CtoV[node_idx] = sign ^ VtoC[node_idx];
+         // 
+         for (int stride = 0; stride < strides; stride++) {
+            node_idx = stride + stride_idx;
+            CtoV[node_idx+batch_offset] = sign ^ VtoC[node_idx+batch_offset];
+         }
       }
-   }
+	}
 }
 
 // The following kernel is launched to decide each check node's decision whether the corresponding variable nodes 
@@ -207,10 +214,11 @@ __global__ void APP_GB(unsigned char* Decide, unsigned char* CtoV, unsigned char
    // calculate the current index on the grid
    unsigned id = threadIdx.x + blockIdx.x * blockDim.x;
 
-   if (id < N) {
-
+  	for(int b=0;b<BATCHSIZE;b++){
+	   if (id < N) { 
+	int batch_offset=b*num_branches;
       // 
-      int i = Receivedword[id];
+      int i = Receivedword[id+b*N];
 
       // 
       int Global = (1 - 2 * i);
@@ -225,12 +233,13 @@ __global__ void APP_GB(unsigned char* Decide, unsigned char* CtoV, unsigned char
 
          // TODO this is not coalesced at all
          node_idx = Interleaver[N*stride+id];
-         Global += (-2) * CtoV[node_idx] + 1;
+         Global += (-2) * CtoV[node_idx+batch_offset] + 1;
       }
       
       // 
-      Decide[id] = (Global < 0)? 1 : ((Global > 0)? 0 : i);
+      Decide[id+b*N] = (Global < 0)? 1 : ((Global > 0)? 0 : i);
    }
+}
 }
 
 //Here a cumulative decision is made on the variable node error depending upon all the four check nodes to which the variable node is connected to 
@@ -245,50 +254,54 @@ __global__ void ComputeSyndrome(unsigned char * Synd, unsigned char * Decide, un
 //	decide[k]=Decide[k];
    //}
    //__syncthreads();
-   if (id < M) {
-      
-      unsigned strides = (num_branches / M);
-	int stride_idx=id * strides;
-      // 
-      for (int stride = 0; stride < strides; stride++) {
-         synd ^=Decide[d_matrix_flat[stride_idx + stride]];
-      }
-   }
+	for(int b=0;b<BATCHSIZE;b++){
+      synd = 0;
+	   if (id < M) {
+	      
+	      unsigned strides = (num_branches / M);
+		int stride_idx=id * strides;
+	      // 
+	      for (int stride = 0; stride < strides; stride++) {
+		 synd ^=Decide[d_matrix_flat[stride_idx + stride]+b*N];
+	      }
+	   }
 
-   // NOTE write back regardless of thread
-   Synd[id]=synd;
+	   // NOTE write back regardless of thread
+	   Synd[id+M*b]=synd;
+	}
 }
 
 //assumes a single block is running // matg access is not coalesced
 
 __global__ void NestedFor(unsigned char* MatG_D, unsigned char* U_D, unsigned k, unsigned N){
 
-   	int id = blockIdx.x*blockDim.x + threadIdx.x;
-	int stride = id*N;
-
+   	int id = threadIdx.x;
+	int stride = threadIdx.x*N;
+	int batch_ofset=blockIdx.x*N;
 	extern __shared__ unsigned char u[]; 
-	
-	for(int i=threadIdx.x; i<N; i+=blockDim.x){
-		u[i]=U_D[i];
-	}
-	__syncthreads();
-	for(int i=k+1;i<N;i++){
-		if(id <= k){
-			//  0:k      0:k            0:k     k+1:N    k+1:N
-			u[id] = u[id] ^ (MatG_D[stride + i] * u[i]);
+	//for(int b=0;b<BATCHSIZE;b++){
+		for(int i=threadIdx.x; i<N; i+=blockDim.x){
+			u[i]=U_D[i+batch_ofset];
 		}
-	}
-	__syncthreads();
-	for(int i=k; i>0;i--){
-		if(id < i){
-			u[id] = u[id] ^ (MatG_D[stride + i] * u[i]);
+		__syncthreads();
+		for(int i=k+1;i<N;i++){
+			if(id <= k){
+				//  0:k      0:k            0:k     k+1:N    k+1:N
+				u[id] = u[id] ^ (MatG_D[stride + i] * u[i]);
+			}
 		}
-	}
+		__syncthreads();
+		for(int i=k; i>0;i--){
+			if(id < i){
+				u[id] = u[id] ^ (MatG_D[stride + i] * u[i]);
+			}
+		}
 
-	__syncthreads();
-	for(int i=threadIdx.x; i<N; i+=blockDim.x){
-		U_D[i]=u[i];
-	}
+		__syncthreads();
+		for(int i=threadIdx.x; i<N; i+=blockDim.x){
+			U_D[i+batch_ofset]=u[i];
+		}
+	//}
 }
 
 __global__ void histogram_private_kernel(unsigned *bins, unsigned num_elements, unsigned num_bins){
@@ -342,35 +355,40 @@ __global__ void setup_kernel (curandState* state, unsigned long seed){
     curand_init ( seed, idx, 0, &state[idx] );
 } 
 
-__global__ void generate( curandState* globalState, unsigned char* randomArray, unsigned start, unsigned end){
+__global__ void generate( curandState* globalState, unsigned char* randomArray, unsigned rank, unsigned N){
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
-   if(idx >= start && idx < end){
+   if(idx >= rank && idx < N){
       curandState localState = globalState[idx];
+	for(int b=0;b<BATCHSIZE;b++){
       float RANDOM = curand_uniform(&localState);
       RANDOM *= 1.999999; //https://stackoverflow.com/questions/18501081/generating-random-number-within-cuda-kernel-in-a-varying-range
       unsigned char random = (unsigned char)truncf(RANDOM);
-      randomArray[idx] = random;
+      randomArray[idx+b*N] = random;
+	}
       globalState[idx] = localState;
    }
 }
 
-__global__ void DataPassGenerate( curandState* globalState, unsigned char* randomArray, unsigned start, unsigned end){
-   int idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-  if(idx >= start && idx < end){
-     curandState localState = globalState[idx];
-     float RANDOM = curand_uniform(&localState);
-     RANDOM *= 1.999999; //https://stackoverflow.com/questions/18501081/generating-random-number-within-cuda-kernel-in-a-varying-range
-     unsigned char random = RANDOM < 0.4;
-     randomArray[idx] = random;
-     globalState[idx] = localState;
-  }
-}
-__global__ void simulateChannel(unsigned char* d_bit_stream, unsigned char* d_messageRecieved, unsigned* d_PermG, unsigned N){
-   int idx = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void generate2( curandState* globalState, unsigned char* randomArray, unsigned N){
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
    if(idx < N){
-      d_messageRecieved[d_PermG[idx]] = d_bit_stream[idx];
+      curandState localState = globalState[idx];
+      float RANDOM = curand_uniform(&localState);
+      RANDOM *= 1.999999; //https://stackoverflow.com/questions/18501081/generating-random-number-within-cuda-kernel-in-a-varying-range
+      unsigned char random = RANDOM < 0.4; //20% chance of a 1
+      randomArray[idx] = random;
+	
+      globalState[idx] = localState;
    }
+}
+
+__global__ void simulateChannel(unsigned char* d_bit_stream, unsigned char* d_messageRecieved, unsigned* d_PermG, unsigned N){
+   int idx = blockIdx.x * blockDim.x + threadIdx.x;
+	for(int b=0;b<BATCHSIZE;b++){
+	   if(idx < N){
+	      d_messageRecieved[d_PermG[idx]+b*N] = d_bit_stream[idx+b*N];
+	   }
+	}
 }
