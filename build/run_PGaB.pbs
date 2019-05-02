@@ -21,25 +21,24 @@
 ### Specify "wallclock time", hhh:mm:ss. Required field
 ###PBS -l select=1:ncpus=2:mem=12gb:ngpus=1
 #PBS -l select=1:ncpus=2:mem=12gb:pcmem=6gb:ngpus=1
-#PBS -l walltime=00:00:10
+#PBS -l walltime=00:10:00
 
 ### Specify total cpu time, hhh:mm:ss. Calculated for you if left out
 ### total cputime = walltime * ncpus
-#PBS -l cput=00:00:20
+###PBS -l cput=00:00:20
 ###setting up array job
-###PBS -J 0-9
 
 ### Load required modules/libraries if needed (openmpi example)
 ### Use "module avail" command to list all available modules
 module load openmpi
 module load cuda91/toolkit/9.1.85
 ### set directory for job execution, ~netid = home directory path
-cd ~jeremysears/ocelote/ece569/PGaB/build
+cd ~/
 
 ###
 ###setenv MPI_DSM_DISTRIBUTE
 
 ### run your executable program with begin and end date and time output
 date
-/usr/bin/time mpirun -n 1 ./PGaB -i ../data/IRISC_dv4_R050_L54_N1296_Dform-t vector > ./outputPGaB.txt
+/usr/bin/time mpirun -n 1 ./PGaB -i ../data/IRISC_dv4_R050_L54_N1296_Dform > ./outputPGaB.txt
 date
