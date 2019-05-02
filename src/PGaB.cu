@@ -88,8 +88,8 @@ int main(int argc, char * argv[]) {
 
       //-------------------------Channels probability for bit-flip-------------------------
       float alpha = 0.01;        // NOTE leave this here...
-      float alpha_max = 0.03;    // max alpha val
-      float alpha_min = 0.03;    // min alpha value
+      float alpha_max = 0.02;    // max alpha val
+      float alpha_min = 0.02;    // min alpha value
       float alpha_step = 0.01;   // step size in alpha for loop
       
       //--------------------------------Random Number Generation--------------------------------
@@ -333,8 +333,11 @@ int main(int argc, char * argv[]) {
       free(h_MatG_flat);
       //-------------------------cuRand stuff--------------------------------------
       curandState* devStates;
+      curandState* devStates2;
       cudaMalloc((void **)&devStates, N * M * sizeof(curandState));
+      cudaMalloc((void **)&devStates2, N * sizeof(curandState));
       setup_kernel<<<GridDim1,BlockDim1>>>(devStates, time(NULL));
+      setup_kernel<<<GridDim1,BlockDim1>>>(devStates2, time(NULL));
       cudaMemcpy(d_PermG, PermG, N * sizeof(unsigned), cudaMemcpyHostToDevice);
 
       // loop from alpha max to alpha min (increasing noise)
@@ -419,7 +422,7 @@ int main(int argc, char * argv[]) {
                                                 (d_VtoC[s],d_CtoV[s],d_messageRecieved[s],d_interleaver,N,num_branches);
                               }
                               else {
-                                    DataPassGenerate<<<GridDim1, BlockDim1, 0, streams[s]>>>(devStates, d_varr[s], 0 , N);
+                                    DataPassGenerate<<<GridDim1, BlockDim1, 0, streams[s]>>>(devStates2, d_varr[s], 0 , N);
                                     DataPassGB_2<<<GridDim1,BlockDim1,0,streams[s]>>>(d_VtoC[s], d_CtoV[s], d_messageRecieved[s], d_interleaver, N, num_branches, d_varr[s]);
                               }
                               CheckPassGB<<<GridDim2,BlockDim2,num_branches * sizeof(unsigned char),streams[s]>>>(d_CtoV[s], d_VtoC[s], M, num_branches);
@@ -507,6 +510,7 @@ int main(int argc, char * argv[]) {
       //Freeing memory on the GPU
       cudaFree(d_interleaver);
       cudaFree(devStates);
+      cudaFree(devStates2);
       cudaFree(d_MatG);
       cudaFree(d_PermG);
 	for(int s=0;s<NUMSTREAMS;s++){
