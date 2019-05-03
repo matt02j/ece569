@@ -33,12 +33,12 @@
 module load openmpi
 module load cuda91/toolkit/9.1.85
 ### set directory for job execution, ~netid = home directory path
-cd ~/
+cd ~jeremysears/ocelote/project/build
 
 ###
 ###setenv MPI_DSM_DISTRIBUTE
 
 ### run your executable program with begin and end date and time output
 date
-/usr/bin/time mpirun -n 1 ./PGaB_serial -i ../data/IRISC_dv4_R050_L54_N1296_Dform > ./outputPGaB_serial.txt
+/usr/bin/time mpirun -n 1 ./PGaB_serial ../data/IRISC_dv4_R050_L54_N1296_Dform ./outputPGaB_serial.txt
 date
