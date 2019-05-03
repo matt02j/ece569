@@ -244,39 +244,38 @@ __global__ void APP_GB(unsigned char* Decide, unsigned char* CtoV, unsigned char
 
 //Here a cumulative decision is made on the variable node error depending upon all the four check nodes to which the variable node is connected to 
 __global__ void ComputeSyndrome(unsigned char * Synd, unsigned char * Decide, unsigned M, unsigned num_branches, unsigned N) {
-	//extern __shared__ unsigned char decide[];
+	extern __shared__ unsigned char decide[];
    // calculate the current index on the grid
    unsigned id = threadIdx.x + blockIdx.x * blockDim.x;
 
    // intialize ___ regardless of bounds...
    unsigned char synd = 0;
-   //for(int k=threadIdx.x; k<N; k+=blockDim.x){
-//	decide[k]=Decide[k];
-   //}
-   //__syncthreads();
+   for(int k=threadIdx.x; k<N*BATCHSIZE; k+=blockDim.x){
+	decide[k]=Decide[k];
+   }
+   __syncthreads();
 	for(int b=0;b<BATCHSIZE;b++){
       synd = 0;
 	   if (id < M) {
 	      
 	      unsigned strides = (num_branches / M);
-		int stride_idx=id * strides;
 	      // 
 	      for (int stride = 0; stride < strides; stride++) {
-		 synd ^=Decide[d_matrix_flat[stride_idx + stride]+b*N];
+		 synd ^=decide[d_matrix_flat[id + stride*M]+b*N];
 	      }
-	   }
+	   
 
-	   // NOTE write back regardless of thread
-	   Synd[id+M*b]=synd;
+	   
+	      Synd[id+M*b]=synd;
+	    }
 	}
 }
 
 //assumes a single block is running // matg access is not coalesced
 
-__global__ void NestedFor(unsigned char* MatG_D, unsigned char* U_D, unsigned k, unsigned N){
+__global__ void NestedFor(unsigned char* MatG_D, unsigned char* U_D, unsigned k, unsigned N,unsigned M){
 
    	int id = threadIdx.x;
-	int stride = threadIdx.x*N;
 	int batch_ofset=blockIdx.x*N;
 	extern __shared__ unsigned char u[]; 
 	//for(int b=0;b<BATCHSIZE;b++){
@@ -287,13 +286,13 @@ __global__ void NestedFor(unsigned char* MatG_D, unsigned char* U_D, unsigned k,
 		for(int i=k+1;i<N;i++){
 			if(id <= k){
 				//  0:k      0:k            0:k     k+1:N    k+1:N
-				u[id] = u[id] ^ (MatG_D[stride + i] * u[i]);
+				u[id] = u[id] ^ (MatG_D[id + i*M] * u[i]);
 			}
 		}
 		__syncthreads();
 		for(int i=k; i>0;i--){
 			if(id < i){
-				u[id] = u[id] ^ (MatG_D[stride + i] * u[i]);
+				u[id] = u[id] ^ (MatG_D[id + i*M] * u[i]);
 			}
 		}
 
@@ -384,11 +383,28 @@ __global__ void generate2( curandState* globalState, unsigned char* randomArray,
    }
 }
 
-__global__ void simulateChannel(unsigned char* d_bit_stream, unsigned char* d_messageRecieved, unsigned* d_PermG, unsigned N){
+__global__ void simulateChannel(unsigned char* d_bit_stream, unsigned char* d_messageRecieved, unsigned* d_PermG, unsigned N, float alpha, curandState* globalState, unsigned char *d_intermediate){
    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-	for(int b=0;b<BATCHSIZE;b++){
-	   if(idx < N){
-	      d_messageRecieved[d_PermG[idx]+b*N] = d_bit_stream[idx+b*N];
-	   }
+	//extern __shared__ unsigned char msgrcvd[];
+	if(idx < N){
+		for(int b=0;b<BATCHSIZE;b++){
+		      	d_intermediate[d_PermG[idx]+b*N] = d_bit_stream[b*N+idx];
+		}
+	}
+	__syncthreads();
+	if(idx < N){
+	  	curandState localState = globalState[idx];
+		for(int b=0;b<BATCHSIZE;b++){
+			int addr = b*N+idx;
+	      		float RANDOM = curand_uniform(&localState);
+			if (RANDOM < alpha) {
+			      d_messageRecieved[addr] =1- d_intermediate[addr];
+			}
+			else{
+			      d_messageRecieved[addr] = d_intermediate[addr];
+			}
+		}
+      		globalState[idx] = localState;
 	}
 }
+

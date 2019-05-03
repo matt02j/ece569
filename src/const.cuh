@@ -22,7 +22,7 @@
 //for open mp
 //#define OMP
 
-// Redirect console to file in bin directory
+// Redirect console to file in bin directory 
 //#define QUIET
 
 // Use all zero codewords
@@ -32,7 +32,7 @@
 #define VERBOSE
 
 #define NUMSTREAMS 8
-#define BATCHSIZE 8
+#define BATCHSIZE 10
 #include <cuda.h>
 
 #ifndef __linux

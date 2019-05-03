@@ -47,7 +47,7 @@ __global__ void APP_GB(unsigned char* Decide, unsigned char* CtoV, unsigned char
 __global__ void ComputeSyndrome(unsigned char * Synd, unsigned char* Decide, unsigned M, unsigned num_branches, unsigned N);
 
 
-__global__ void NestedFor(unsigned char* MatG_D, unsigned char* U_D, unsigned k, unsigned N);
+__global__ void NestedFor(unsigned char* MatG_D, unsigned char* U_D, unsigned k, unsigned N,unsigned M);
 
 __global__ void histogram_private_kernel(unsigned *bins, unsigned num_elements, unsigned num_bins);
 
@@ -57,6 +57,6 @@ __global__ void generate(curandState* globalState, unsigned char* randomArray, u
 
 __global__ void generate2(curandState* globalState, unsigned char* randomArray, unsigned N);
 
-__global__ void simulateChannel(unsigned char* d_bit_stream, unsigned char* d_messageRecieved, unsigned* d_PermG, unsigned N);
+__global__ void simulateChannel(unsigned char* d_bit_stream, unsigned char* d_messageRecieved, unsigned* d_PermG, unsigned N, float alpha, curandState* globalState, unsigned char *d_intermediate);
 
 #endif

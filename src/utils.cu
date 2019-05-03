@@ -281,15 +281,17 @@ void histogram(unsigned* hist, unsigned** data_matrix, const unsigned* rowRanks,
 
 // unroll the data matrix
 void unrollMatrix(unsigned* unrolledMatrix, unsigned** data_matrix, const unsigned* rowRanks, const unsigned depth, const unsigned num_branches) {
-
+	
    // unroll the memory
+
    unsigned i = 0;
-   for (unsigned m = 0; m < depth; m++) {
-      for (unsigned n = 0; n < rowRanks[m]; n++) {
+   for (unsigned n = 0; n < 8; n++) {
+      for (unsigned m = 0; m < depth; m++) {
          unrolledMatrix[i] = data_matrix[m][n];
          i++;
       }
    }
+	
 }
 
 void print_array_int(int* arr, int size){
