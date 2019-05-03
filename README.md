@@ -1,6 +1,6 @@
-# ece569
+# ece569 demo instructions
 
-# Instructions to run serial code:
+# Instructions to run serial (CPU) code:
 Assuming you are in teh directory where your project folder exists   
   
 1:cd project/build/  
