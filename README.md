@@ -1,7 +1,7 @@
 # ece569
 
 # Instructions to run serial code:
-From project folder  
+Assuming you are in teh directory where your project folder exists   
   
 1:cd project/build/  
 2:make serial  
@@ -9,7 +9,7 @@ From project folder
 
 
 # Instructions to run cuda code:
-From project folder  
+Assuming you are in teh directory where your project folder exists   
   
 1: cd project  
 2: module load cuda91/toolkit/9.1.85   
