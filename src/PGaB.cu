@@ -82,14 +82,15 @@ int main(int argc, char * argv[]) {
       std::string matrixAddr(argv[1]);    // convert data addr to a string
 
       //-------------------------Simulation parameters for PGaB-------------------------
-      unsigned NbMonteCarlo = 300000; // Maximum number of codewords sent
+      unsigned NbMonteCarlo = 1000000; // Maximum number of codewords sent
       unsigned itteration_count = 100; // Maximum nb of iterations
       unsigned frames_tested = 0;      // NOTE dont move this
       unsigned frame_count = 100;      // Simulation stops when frame_count in error
 
       //-------------------------Channels probability for bit-flip-------------------------
       float alpha = 0.01;        // NOTE leave this here...
-      float alpha_max = 0.02;    // max alpha val
+
+      float alpha_max = 0.06;    // max alpha val
       float alpha_min = 0.02;    // min alpha value
       float alpha_step = 0.01;   // step size in alpha for loop
       

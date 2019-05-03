@@ -223,7 +223,7 @@ int main(int argc, char * argv[])
 
     // brkunl
   alpha_max= 0.06;		    //Channel Crossover Probability Max and Min
-  alpha_min= 0.02;
+  alpha_min= 0.03;
   alpha_step=0.01;
 
 	NbOrInput=1;      //refer the ISCAS2015 paper for the explanation of this parameter
