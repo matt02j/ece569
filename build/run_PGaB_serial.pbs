@@ -3,7 +3,7 @@
 ### script to run an mpi job using 28 cores or less (using only one 28-core node)
 
 ### Set the job name
-#PBS -N PGaB
+#PBS -N PGaB_Serial
 
 ### Specify the group for this job
 ### List of PI groups available to each user can be found with "va" command
