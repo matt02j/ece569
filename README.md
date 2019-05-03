@@ -1,7 +1,7 @@
 # ece569 demo instructions
 
 # Instructions to run serial (CPU) code:
-Assuming you are in teh directory where your project folder exists   
+Assuming you are in the directory where your project folder exists   
   
 1:cd project/build/  
 2:make serial  
