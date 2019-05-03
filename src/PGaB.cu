@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Created By        : Adithya Madhava Rao, Harshil Pankaj Kakaiya, Priyanka Devashish Goswami
-// Modified By       : Matt <LastName>, Jeremy Seers, Sebastian Thiem
+// Modified By       : Matthew Johnson, Jeremy Sears, Sebastian Thiem
 //                   :
 // Organization:     : The University of Arizona
 //                   :
@@ -19,6 +19,7 @@
 #include <iostream>
 #include <fstream>
 #include <random>
+#include <omp.h>
 
 #include "const.cuh"
 #include "utils.cuh"
@@ -81,14 +82,14 @@ int main(int argc, char * argv[]) {
       std::string matrixAddr(argv[1]);    // convert data addr to a string
 
       //-------------------------Simulation parameters for PGaB-------------------------
-      unsigned NbMonteCarlo = 1000000; // Maximum number of codewords sent
+      unsigned NbMonteCarlo = 300000; // Maximum number of codewords sent
       unsigned itteration_count = 100; // Maximum nb of iterations
       unsigned frames_tested = 0;      // NOTE dont move this
       unsigned frame_count = 100;      // Simulation stops when frame_count in error
 
       //-------------------------Channels probability for bit-flip-------------------------
       float alpha = 0.01;        // NOTE leave this here...
-      float alpha_max = 0.07;    // max alpha val
+      float alpha_max = 0.02;    // max alpha val
       float alpha_min = 0.02;    // min alpha value
       float alpha_step = 0.01;   // step size in alpha for loop
       
@@ -127,6 +128,7 @@ int main(int argc, char * argv[]) {
 	unsigned char* d_bit_stream[NUMSTREAMS];       // Randomly generated bit stream
 	unsigned char* message[NUMSTREAMS];         // test message {0,1,0,0,1,0,...} 
 	unsigned char* d_varr[NUMSTREAMS];
+	unsigned char *d_intermediate[NUMSTREAMS];
 
       //-------------------------Device memory structures-------------------------
       // unsigned* d_matrix_flat;      // held as global in constant memory
@@ -158,18 +160,16 @@ int main(int argc, char * argv[]) {
       dim3 NestedGrid(BATCHSIZE);
 
 #ifdef VERBOSE
-      std::cout << "Reading in test data...";
+      std::cout << "Reading in test data..."<< std::endl;
 #endif
 
       // Basically M*ColWidth but this code allows 
       // for their to be staggered columns, 
       // so the calculation is not as simple
       unsigned num_branches;
-
       // allocate and get row ranks
       rowRanks = (unsigned*)malloc(M * sizeof(unsigned));
       readRowRanks(rowRanks, M, (matrixAddr + "_RowDegree").c_str());
-
       // alocate and read in test data matrix from local file (also get num_branches while were in this loop)
       unsigned cols = 0;
       data_matrix = (unsigned**)malloc(M * sizeof(unsigned*));
@@ -228,6 +228,7 @@ int main(int argc, char * argv[]) {
 	     	cudaMalloc((void**)&d_messageRecieved[s], N * sizeof(unsigned char)*BATCHSIZE);
 	      	cudaMalloc((void**)&d_decoded[s], N * sizeof(unsigned char)*BATCHSIZE);
 	      	cudaMalloc((void **)&d_bit_stream[s], N * sizeof(unsigned char)*BATCHSIZE);
+		cudaMalloc((void **)&d_intermediate[s], N * sizeof(unsigned char)*BATCHSIZE);
 		message[s] = (unsigned char*)calloc(N, sizeof(unsigned char)*BATCHSIZE);
 		cudaMalloc((void**)&d_varr[s],N*sizeof(unsigned char));
 	}
@@ -289,7 +290,6 @@ int main(int argc, char * argv[]) {
       unsigned rank;
 
       rank = GaussianElimination_MRB(PermG, h_MatG, sparse_matrix, M, N);
-
       // free no longer needed data structures
       free2d(sparse_matrix, M);
       free2d(data_matrix, M);
@@ -319,7 +319,7 @@ int main(int argc, char * argv[]) {
       // Flatten for memcpy // if we edit the gausian elimination function we can get rid of this
       for (unsigned m = 0; m < M; m++) {
          for (unsigned n = 0; n < N; n++) {
-            h_MatG_flat[m * N + n] = (unsigned char)h_MatG[m][n];
+            h_MatG_flat[n * M + m] = (unsigned char)h_MatG[m][n];
          }
       } 
 
@@ -331,7 +331,8 @@ int main(int argc, char * argv[]) {
       curandState* devStates;
       cudaMalloc((void **)&devStates, N * M * sizeof(curandState));
       setup_kernel<<<GridDim1,BlockDim1>>>(devStates, time(NULL));
-      cudaMemcpy(d_PermG, PermG, N * sizeof(unsigned), cudaMemcpyHostToDevice);
+
+      cudaMemcpyAsync(d_PermG, PermG, N * sizeof(unsigned), cudaMemcpyHostToDevice);
 
       // loop from alpha max to alpha min (increasing noise)
       for (alpha = alpha_max; alpha >= alpha_min; alpha -= alpha_step) {
@@ -360,7 +361,7 @@ int main(int argc, char * argv[]) {
 		for(int s=0;s<NUMSTREAMS;s++){
            	 cudaMemsetAsync(d_bit_stream[s], 0, N * sizeof(unsigned char)*BATCHSIZE,streams[s]);
 
-           	 generate<<<BlockDim1, GridDim1,0,streams[s]>>>(devStates, d_bit_stream[s], rank, N);
+           	 generate<<< GridDim1,BlockDim1,0,streams[s]>>>(devStates, d_bit_stream[s], rank, N);
 
             //cudaMemcpy(h_bit_stream, devRandomValues, N * sizeof(unsigned char), cudaMemcpyDeviceToHost);
 
@@ -371,15 +372,17 @@ int main(int argc, char * argv[]) {
 
 		    //replace that super long loop
 		    //cudaMemcpyAsync(d_bit_stream[s], h_bit_stream[s], N * sizeof(unsigned char), cudaMemcpyHostToDevice,streams[s]);
-		    NestedFor <<<NestedGrid, NestedBlock, N * sizeof(unsigned char),streams[s] >>>(d_MatG, d_bit_stream[s], rank - 1, N);
+
+		    NestedFor <<<NestedGrid, NestedBlock, N * sizeof(unsigned char),streams[s] >>>(d_MatG, d_bit_stream[s], rank - 1, N,M);
 		   // cudaMemcpyAsync(h_bit_stream[s], d_bit_stream[s], N * sizeof(unsigned char)*BATCHSIZE, cudaMemcpyDeviceToHost,streams[s]); 
             }
             for(int s=0;s<NUMSTREAMS;s++){
                   cudaStreamSynchronize(streams[s]);
                   
-                  simulateChannel<<<GridDim1, BlockDim1, 0, streams[s]>>>(d_bit_stream[s], d_messageRecieved[s], d_PermG, N);
 
-                  cudaMemcpyAsync(message[s], d_messageRecieved[s], N * sizeof(unsigned char)*BATCHSIZE, cudaMemcpyDeviceToHost);
+                  simulateChannel<<<GridDim1, BlockDim1, BLOCK_DIM_1*sizeof(unsigned char)*BATCHSIZE, streams[s]>>>(d_bit_stream[s], d_messageRecieved[s], d_PermG, N,alpha,devStates, d_intermediate[s]);
+		  cudaMemcpyAsync(message[s], d_intermediate[s], N * sizeof(unsigned char)*BATCHSIZE, cudaMemcpyDeviceToHost,streams[s]);
+
                   //for (unsigned k = 0; k < N; k++) {
                   //      message[s][PermG[k]] = h_bit_stream[s][k];
                   //}
@@ -387,7 +390,8 @@ int main(int argc, char * argv[]) {
                   //---------------------------------------Simulate Channel---------------------------------------
 
                   // Flip the bits with the alpha percentage (noise over channel)
-			
+
+		/*
 		 for(int i=0;i<BATCHSIZE;i++){
                   	for (unsigned n = 0; n < N; n++) {
 		                if (dist(e2) < alpha) {
@@ -401,7 +405,8 @@ int main(int argc, char * argv[]) {
             
                   //-----------------------------------------------Decode-----------------------------------------------
 
-                  cudaMemcpyAsync(d_messageRecieved[s], h_messageRecieved[s], N * sizeof(unsigned char)*BATCHSIZE, cudaMemcpyHostToDevice,streams[s]);
+
+                  cudaMemcpyAsync(d_messageRecieved[s], h_messageRecieved[s], N * sizeof(unsigned char)*BATCHSIZE, cudaMemcpyHostToDevice,streams[s]);*/
             } 
             unsigned itter = 0;
 		unsigned it[NUMSTREAMS]={0};
@@ -426,7 +431,8 @@ int main(int argc, char * argv[]) {
 
                               APP_GB<<<GridDim1,BlockDim1,0,streams[s]>>>(d_decoded[s],d_CtoV[s], d_messageRecieved[s], d_interleaver, N, num_branches);
                               
-                              ComputeSyndrome<<<GridDim2, BlockDim2, N * sizeof(unsigned char),streams[s]>>>(d_synd[s], d_decoded[s], M, num_branches, N);
+
+                              ComputeSyndrome<<<GridDim2, BlockDim2, N * sizeof(unsigned char)*BATCHSIZE,streams[s]>>>(d_synd[s], d_decoded[s], M, num_branches, N);
                               cudaMemcpyAsync(h_synd[s], d_synd[s], M * sizeof(unsigned char)*BATCHSIZE, cudaMemcpyDeviceToHost,streams[s]);
                         }
                   }    

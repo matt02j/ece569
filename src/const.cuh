@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Created By        : Adithya Madhava Rao, Harshil Pankaj Kakaiya, Priyanka Devashish Goswami
-// Modified By       : Matt <LastName>, Jeremy Seers, Sebastian Thiem
+// Modified By       : Matthew Johnson, Jeremy Sears, Sebastian Thiem
 //                   :
 // Organization:     : The University of Arizona
 //                   :
@@ -22,7 +22,7 @@
 //for open mp
 //#define OMP
 
-// Redirect console to file in bin directory
+// Redirect console to file in bin directory 
 //#define QUIET
 
 // Use all zero codewords
@@ -31,8 +31,9 @@
 // Print out everything were doing
 #define VERBOSE
 
-#define NUMSTREAMS 4
-#define BATCHSIZE 4
+#define NUMSTREAMS 8
+#define BATCHSIZE 10
+
 #include <cuda.h>
 
 #ifndef __linux
