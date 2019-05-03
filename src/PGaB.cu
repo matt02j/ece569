@@ -88,8 +88,8 @@ int main(int argc, char * argv[]) {
 
       //-------------------------Channels probability for bit-flip-------------------------
       float alpha = 0.01;        // NOTE leave this here...
-      float alpha_max = 0.07;    // max alpha val
-      float alpha_min = 0.02;    // min alpha value
+      float alpha_max = 0.06;    // max alpha val
+      float alpha_min = 0.03;    // min alpha value
       float alpha_step = 0.01;   // step size in alpha for loop
       
       //--------------------------------Random Number Generation--------------------------------
