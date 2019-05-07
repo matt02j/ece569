@@ -65,8 +65,8 @@ unsigned GaussianElimination_MRB(unsigned* Perm, unsigned** MatOut, unsigned** M
    Index = (int*) calloc(N, sizeof(int));
 
    // Triangularization
-   int indColumn = 0;
-   int nb = 0;
+   unsigned indColumn = 0;
+   unsigned nb = 0;
    int dep = 0;
 
    //

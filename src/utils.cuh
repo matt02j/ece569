@@ -17,10 +17,48 @@
 #define UTIL_H
 
 #include "const.cuh"
+#include <pthread.h>
+#include <cuda.h>
+#include <curand_kernel.h>
 
 #ifdef PROFILE
 #include <sys/time.h>
 #endif
+
+typedef struct lots_of_pointers{
+unsigned char* d_bit_stream;
+unsigned char* d_MatG;
+unsigned char* d_messageRecieved;
+unsigned char* h_messageRecieved;
+unsigned char* d_intermediate;
+unsigned char* d_VtoC;
+unsigned char* d_CtoV;
+unsigned * d_interleaver;
+unsigned char* d_decoded;
+unsigned char* h_decoded;
+unsigned char* d_synd;
+unsigned char* h_synd;
+unsigned * d_PermG;
+unsigned char* d_varr;
+curandState* devStates;
+unsigned rank;
+unsigned N;
+unsigned M;
+float alpha;
+unsigned num_branches;
+unsigned* NiterMax;
+unsigned* NiterMoy;
+unsigned* err_total_count;
+unsigned* missed_error_count;
+unsigned* Dmin;
+unsigned* bit_error_count;
+unsigned* nb; //frame count
+int id;
+cudaStream_t stream;
+} myargs;
+
+
+
 
 //cuda check
 inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort);

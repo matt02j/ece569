@@ -20,40 +20,26 @@
 #include <fstream>
 #include <random>
 #include <omp.h>
+#include <pthread.h>
 
 #include "const.cuh"
 #include "utils.cuh"
 #include "kernels.cuh"
 
-// TODO Verify stride paterns
-// All of the following functions use this
-// for (unsigned stride = 0; stride < (num_branches / N); stride++)
-// pattern and this seems inherently a little weird that each
-// thread is striding 1, 2, 3, 4... away from itself...
-// 
-// TODO The Data pass modules and their 2 for loops essentially 
-// read CtoV[node_idx] across "strides" different elements, and 
-// throws away data so the next for loop has to read global again. 
-// Maybe find a way to keep these values in shared memory. This may 
-// be weird because of the striding pattern, but if that can be 
-// addressed this opens up for us
-//
-// TODO once we model what these functions are doing 
-// COMMENT
 // 
 // TODO GaussianElimination_MRB as a kernel
 //
-// TODO Main is reading args in the most horendous way ive
-// ever seen, us fstreams, arg parser, ect anything to make
-// that not what it is
 // also uses 4 different input files, 3 of which are only dimensions
-//
-// TODO replace calloc with mallocs where possible
-//
-// also uses 4 different input files, 3 of which are only dimensions
-// TODO replace calloc with mallocs where possible
-//
-// TODO make sure all allocated memory gets freed at the apropriate time
+
+
+
+
+
+static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t lock2 = PTHREAD_MUTEX_INITIALIZER;
+
+void* frameloop(void* args);
+
 
 int main(int argc, char * argv[]) {
 
@@ -81,14 +67,9 @@ int main(int argc, char * argv[]) {
       //-------------------------Reading command line arguments-------------------------
       std::string matrixAddr(argv[1]);    // convert data addr to a string
 
-      //-------------------------Simulation parameters for PGaB-------------------------
-      unsigned NbMonteCarlo = 300000; // Maximum number of codewords sent
-      unsigned itteration_count = 100; // Maximum nb of iterations
-      unsigned frames_tested = 0;      // NOTE dont move this
-      unsigned frame_count = 100;      // Simulation stops when frame_count in error
-
       //-------------------------Channels probability for bit-flip-------------------------
       float alpha = 0.01;        // NOTE leave this here...
+
       float alpha_max = 0.02;    // max alpha val
       float alpha_min = 0.02;    // min alpha value
       float alpha_step = 0.01;   // step size in alpha for loop
@@ -126,9 +107,12 @@ int main(int argc, char * argv[]) {
 	unsigned char* d_decoded[NUMSTREAMS];          // message decoded
 	unsigned char* d_synd[NUMSTREAMS];                  // ...
 	unsigned char* d_bit_stream[NUMSTREAMS];       // Randomly generated bit stream
-	unsigned char* message[NUMSTREAMS];         // test message {0,1,0,0,1,0,...} 
+	//unsigned char* message[NUMSTREAMS];         // test message {0,1,0,0,1,0,...} 
 	unsigned char* d_varr[NUMSTREAMS];
 	unsigned char *d_intermediate[NUMSTREAMS];
+	myargs streamargs[NUMSTREAMS];
+	pthread_t threads[NUMSTREAMS];
+//pthread_mutex_t * lock=NULL;
 
       //-------------------------Device memory structures-------------------------
       // unsigned* d_matrix_flat;      // held as global in constant memory
@@ -229,7 +213,7 @@ int main(int argc, char * argv[]) {
 	      	cudaMalloc((void**)&d_decoded[s], N * sizeof(unsigned char)*BATCHSIZE);
 	      	cudaMalloc((void **)&d_bit_stream[s], N * sizeof(unsigned char)*BATCHSIZE);
 		cudaMalloc((void **)&d_intermediate[s], N * sizeof(unsigned char)*BATCHSIZE);
-		message[s] = (unsigned char*)calloc(N, sizeof(unsigned char)*BATCHSIZE);
+		///message[s] = (unsigned char*)calloc(N, sizeof(unsigned char)*BATCHSIZE);
 		cudaMalloc((void**)&d_varr[s],N*sizeof(unsigned char));
 	}
       //message = (unsigned *)calloc(N, sizeof(unsigned));
@@ -308,13 +292,13 @@ int main(int argc, char * argv[]) {
       unsigned err_total_count;
       unsigned bit_error_count;
       unsigned missed_error_count;
-      unsigned err_count;
+      //unsigned err_count;
       unsigned NiterMoy;
       unsigned NiterMax;
       unsigned Dmin;
 
       // add stochastic element to itteratcions past 16
-      unsigned varr = (dist(e2) <= 20) ? 1 : 0;
+      //unsigned varr = (dist(e2) <= 20) ? 1 : 0;
 
       // Flatten for memcpy // if we edit the gausian elimination function we can get rid of this
       for (unsigned m = 0; m < M; m++) {
@@ -322,7 +306,7 @@ int main(int argc, char * argv[]) {
             h_MatG_flat[n * M + m] = (unsigned char)h_MatG[m][n];
          }
       } 
-
+	unsigned nb=0;
 
       // copy h_MatG_flat to device only once
       cudaMemcpyAsync(d_MatG, h_MatG_flat, M * N * sizeof(unsigned char), cudaMemcpyHostToDevice);
@@ -333,6 +317,38 @@ int main(int argc, char * argv[]) {
       setup_kernel<<<GridDim1,BlockDim1>>>(devStates, time(NULL));
 
       cudaMemcpyAsync(d_PermG, PermG, N * sizeof(unsigned), cudaMemcpyHostToDevice);
+
+	//pthread_mutex_init(lock,NULL);
+	for(int s=0; s<NUMSTREAMS; s++){
+		streamargs[s].d_bit_stream=d_bit_stream[s];
+		streamargs[s].d_MatG=d_MatG;
+		streamargs[s].d_messageRecieved=d_messageRecieved[s];
+		streamargs[s].h_messageRecieved=h_messageRecieved[s];
+		streamargs[s].d_VtoC=d_VtoC[s];
+		streamargs[s].d_CtoV=d_CtoV[s];
+		streamargs[s].d_interleaver=d_interleaver;
+		streamargs[s].d_decoded=d_decoded[s];
+		streamargs[s].h_decoded=h_decoded[s];
+		streamargs[s].d_synd=d_synd[s];
+		streamargs[s].h_synd=h_synd[s];
+		streamargs[s].d_PermG=d_PermG;
+		streamargs[s].d_varr=d_varr[s];
+		streamargs[s].devStates=devStates;
+		streamargs[s].d_intermediate=d_intermediate[s];
+		streamargs[s].rank=rank;
+		streamargs[s].N=N;
+		streamargs[s].M=M;
+		streamargs[s].num_branches=num_branches;
+		streamargs[s].NiterMax=&NiterMax;
+		streamargs[s].NiterMoy=&NiterMoy;
+		streamargs[s].err_total_count=&err_total_count;
+		streamargs[s].missed_error_count=&missed_error_count;
+		streamargs[s].Dmin=&Dmin;
+		streamargs[s].bit_error_count=&bit_error_count;
+		streamargs[s].nb=&nb;
+		streamargs[s].id=s;
+		streamargs[s].stream=streams[s];
+	}
 
       // loop from alpha max to alpha min (increasing noise)
       for (alpha = alpha_max; alpha >= alpha_min; alpha -= alpha_step) {
@@ -345,17 +361,25 @@ int main(int argc, char * argv[]) {
             err_total_count = 0;
             bit_error_count = 0;
             missed_error_count = 0;
-            err_count = 0;
+            //err_count = 0;
 
             for(int s=0;s<NUMSTREAMS;s++){
             //these are both all 0s
+		  streamargs[s].alpha=alpha;
                   cudaMemsetAsync(d_CtoV[s], 0, num_branches * sizeof(unsigned char)*BATCHSIZE,streams[s]);
                   cudaMemsetAsync(d_VtoC[s], 0, num_branches * sizeof(unsigned char)*BATCHSIZE,streams[s]);
             }
 
-            frames_tested = 0;
-            unsigned nb = 0;
-            while (nb < NbMonteCarlo && err_total_count < frame_count) {
+             nb = 0;
+
+		for(int s=0; s<NUMSTREAMS;s++){
+			pthread_create(&threads[s],NULL,frameloop,(void*)&streamargs[s]);
+		}
+		for(int s=0; s<NUMSTREAMS;s++){
+			pthread_join(threads[s],NULL);
+		}
+		////do stream level parallelization of frame loop using cpu multithread to avoid overhead from divergent frames affecting other streams
+           /* while (nb < NbMonteCarlo && err_total_count < frame_count) {
 
             //--------------------------------------------Encode--------------------------------------------
 		for(int s=0;s<NUMSTREAMS;s++){
@@ -372,17 +396,15 @@ int main(int argc, char * argv[]) {
 
 		    //replace that super long loop
 		    //cudaMemcpyAsync(d_bit_stream[s], h_bit_stream[s], N * sizeof(unsigned char), cudaMemcpyHostToDevice,streams[s]);
-
 		    NestedFor <<<NestedGrid, NestedBlock, N * sizeof(unsigned char),streams[s] >>>(d_MatG, d_bit_stream[s], rank - 1, N,M);
 		   // cudaMemcpyAsync(h_bit_stream[s], d_bit_stream[s], N * sizeof(unsigned char)*BATCHSIZE, cudaMemcpyDeviceToHost,streams[s]); 
             }
             for(int s=0;s<NUMSTREAMS;s++){
                   cudaStreamSynchronize(streams[s]);
                   
-
                   simulateChannel<<<GridDim1, BlockDim1, BLOCK_DIM_1*sizeof(unsigned char)*BATCHSIZE, streams[s]>>>(d_bit_stream[s], d_messageRecieved[s], d_PermG, N,alpha,devStates, d_intermediate[s]);
 		  cudaMemcpyAsync(message[s], d_intermediate[s], N * sizeof(unsigned char)*BATCHSIZE, cudaMemcpyDeviceToHost,streams[s]);
-
+                  
                   //for (unsigned k = 0; k < N; k++) {
                   //      message[s][PermG[k]] = h_bit_stream[s][k];
                   //}
@@ -390,23 +412,21 @@ int main(int argc, char * argv[]) {
                   //---------------------------------------Simulate Channel---------------------------------------
 
                   // Flip the bits with the alpha percentage (noise over channel)
-
-		/*
-		 for(int i=0;i<BATCHSIZE;i++){
-                  	for (unsigned n = 0; n < N; n++) {
-		                if (dist(e2) < alpha) {
-		                      h_messageRecieved[s][i*N+n] = 1 - message[s][i*N+n];
-		                }
-		                else {
-		                      h_messageRecieved[s][i*N+n] = message[s][i*N+n];
-		                }
-			}
-                  }
+			
+		// for(int i=0;i<BATCHSIZE;i++){
+               //   	for (unsigned n = 0; n < N; n++) {
+		//               if (dist(e2) < alpha) {
+		 //                     h_messageRecieved[s][i*N+n] = 1 - message[s][i*N+n];
+		 //               }
+		 //               else {
+		//                      h_messageRecieved[s][i*N+n] = message[s][i*N+n];
+		 //               }
+		//	}
+                 // }
             
                   //-----------------------------------------------Decode-----------------------------------------------
 
-
-                  cudaMemcpyAsync(d_messageRecieved[s], h_messageRecieved[s], N * sizeof(unsigned char)*BATCHSIZE, cudaMemcpyHostToDevice,streams[s]);*/
+                 //cudaMemcpyAsync(d_messageRecieved[s], h_messageRecieved[s], N * sizeof(unsigned char)*BATCHSIZE, cudaMemcpyHostToDevice,streams[s]);
             } 
             unsigned itter = 0;
 		unsigned it[NUMSTREAMS]={0};
@@ -431,7 +451,6 @@ int main(int argc, char * argv[]) {
 
                               APP_GB<<<GridDim1,BlockDim1,0,streams[s]>>>(d_decoded[s],d_CtoV[s], d_messageRecieved[s], d_interleaver, N, num_branches);
                               
-
                               ComputeSyndrome<<<GridDim2, BlockDim2, N * sizeof(unsigned char)*BATCHSIZE,streams[s]>>>(d_synd[s], d_decoded[s], M, num_branches, N);
                               cudaMemcpyAsync(h_synd[s], d_synd[s], M * sizeof(unsigned char)*BATCHSIZE, cudaMemcpyDeviceToHost,streams[s]);
                         }
@@ -444,6 +463,7 @@ int main(int argc, char * argv[]) {
 				hasConvergedStream[s]=true;
 				for(int b=0;b<BATCHSIZE;b++){
 		                      hasConverged[s][b] = true;
+				////if we do a reduction on d_synd we can get rid of this loop
 		                      for (unsigned kk = 0; kk < M; kk++) {
 		                            if (h_synd[s][kk+M*b] == 1) {
 		                                  hasConverged[s][b] = false;
@@ -456,7 +476,7 @@ int main(int argc, char * argv[]) {
                         }
                   }
                   itter++;
-            }//while
+            }//itter loop
 
 
 		for(int s=0;s<NUMSTREAMS;s++){
@@ -466,9 +486,10 @@ int main(int argc, char * argv[]) {
 		    // Compute Statistics
 		    //============================================================================
 		    frames_tested+=(NUMSTREAMS*BATCHSIZE);
-
+		////maybe move error checking to gpu
 		for(int s=0;s<NUMSTREAMS;s++){
 			cudaStreamSynchronize(streams[s]);
+			//#pragma omp parallel for
 			for(int b=0;b<BATCHSIZE;b++){
 		    		err_count = 0;
 			    // Calculate bit errors
@@ -501,7 +522,7 @@ int main(int argc, char * argv[]) {
 		}
 
             nb+= NUMSTREAMS * BATCHSIZE;
-         }//frame loop
+         }//frame loop*/
 
 #ifdef PROFILE  
          gettimeofday(&stop, NULL);
@@ -510,10 +531,10 @@ int main(int argc, char * argv[]) {
 #endif 
 
          std::cout << alpha << "\t";
-         std::cout << bit_error_count << "(" << (float)bit_error_count / N / frames_tested << ")  ";
-         std::cout << err_total_count << "(" << (float)err_total_count / frames_tested << ")\t";
-         std::cout << frames_tested << "\t\t";
-         std::cout << (float)NiterMoy / frames_tested << "(" << NiterMax << ")\t\t";
+         std::cout << bit_error_count << "(" << (float)bit_error_count / N / nb << ")  ";
+         std::cout << err_total_count << "(" << (float)err_total_count / nb << ")\t";
+         std::cout << nb << "\t\t";
+         std::cout << (float)NiterMoy / nb << "(" << NiterMax << ")\t\t";
          std::cout << missed_error_count << "(" << Dmin << ")\t" << std::endl;
 
       }//alpha loop
@@ -549,4 +570,153 @@ int main(int argc, char * argv[]) {
       fprintf(stderr, "Usage: PGaB /Path/To/Data/File");
    }
    return 0;
+}
+
+
+
+void* frameloop(void* args){
+myargs *arg = (myargs*)args;
+      dim3 GridDim1((arg->N - 1) / BLOCK_DIM_1 + 1, 1);
+      dim3 BlockDim1(BLOCK_DIM_1);
+      dim3 GridDim2((arg->M - 1) / BLOCK_DIM_2 + 1, 1);
+      dim3 BlockDim2(BLOCK_DIM_2);
+      dim3 NestedBlock(1024);
+      dim3 NestedGrid(BATCHSIZE);
+unsigned err_count=0;
+unsigned itter=0;
+unsigned char *message = (unsigned char*) malloc(arg->N*BATCHSIZE);
+
+	while( *(arg->nb) < NbMonteCarlo && *(arg->err_total_count) < frame_count ){
+
+            //--------------------------------------------Encode--------------------------------------------
+		
+           	 cudaMemsetAsync(arg->d_bit_stream, 0, arg->N * sizeof(unsigned char)*BATCHSIZE,arg->stream);
+
+           	 generate<<< GridDim1,BlockDim1,0,arg->stream>>>(arg->devStates, arg->d_bit_stream, arg->rank, arg->N);
+
+		 NestedFor <<<NestedGrid, NestedBlock, N * sizeof(unsigned char),arg->stream>>>(arg->d_MatG, arg->d_bit_stream, arg->rank - 1, arg->N,arg->M);
+
+		 cudaMemcpyAsync(arg->h_messageRecieved, arg->d_bit_stream, arg->N * sizeof(unsigned char)*BATCHSIZE, cudaMemcpyDeviceToHost,arg->stream);
+
+                 simulateChannel<<<GridDim1, BlockDim1, BLOCK_DIM_1*sizeof(unsigned char)*BATCHSIZE, arg->stream>>>(arg->d_bit_stream, arg->d_messageRecieved, arg->d_PermG, arg->N,arg->alpha,arg->devStates, arg->d_intermediate);
+		 cudaMemcpyAsync(message, arg->d_intermediate, arg->N * sizeof(unsigned char)*BATCHSIZE, cudaMemcpyDeviceToHost,arg->stream);
+
+            	itter = 0;
+
+            	bool hasConverged[BATCHSIZE] = {false};
+
+		bool hasConvergedStream=false;
+
+	
+
+	
+
+            while(itter < itteration_count && !hasConvergedStream){
+
+                       
+
+                              // Different itterations have different kernels
+
+                              if (itter == 0) {
+
+                                    DataPassGB_0<<<GridDim1,BlockDim1,0,arg->stream>>> (arg->d_VtoC, arg->d_messageRecieved, arg->d_interleaver, arg->N, arg->num_branches);
+
+                              }
+
+                              else if (itter < 15) {
+                                    DataPassGB_1<<<GridDim1,BlockDim1,0,arg->stream>>> (arg->d_VtoC, arg->d_CtoV, arg->d_messageRecieved, arg->d_interleaver, arg->N, arg->num_branches);
+                              }
+
+                              else {
+           	 		generate2<<<GridDim1, BlockDim1,0,arg->stream>>>(arg->devStates, arg->d_varr, arg->N);
+                               	DataPassGB_2<<<GridDim1,BlockDim1,0,arg->stream>>>(arg->d_VtoC, arg->d_CtoV, arg->d_messageRecieved, arg->d_interleaver, arg->N, arg->num_branches, arg->d_varr);
+                              }
+
+                              CheckPassGB<<<GridDim2,BlockDim2,0,arg->stream>>>(arg->d_CtoV, arg->d_VtoC, arg->M, arg->num_branches);
+
+                              APP_GB<<<GridDim1,BlockDim1,0,arg->stream>>>(arg->d_decoded,arg->d_CtoV, arg->d_messageRecieved,arg-> d_interleaver, arg->N, arg->num_branches);
+                              
+                              ComputeSyndrome<<<GridDim2, BlockDim2, arg->N * sizeof(unsigned char)*BATCHSIZE,arg->stream>>>(arg->d_synd, arg->d_decoded, arg->M, arg->num_branches, arg->N);
+                              cudaMemcpyAsync(arg->h_synd, arg->d_synd, arg->M * sizeof(unsigned char)*BATCHSIZE, cudaMemcpyDeviceToHost,arg->stream);
+
+
+                              // check for convergence
+				cudaStreamSynchronize(arg->stream);
+				hasConvergedStream=true;
+				for(int b=0;b<BATCHSIZE && hasConvergedStream;b++){
+		                      hasConverged[b] = true;
+				////if we do a reduction on d_synd we can get rid of this loop
+		                      for (unsigned kk = 0; kk < arg->M; kk++) {
+		                            if (arg->h_synd[kk+arg->M*b] == 1) {
+		                                  hasConverged[b] = false;
+						  hasConvergedStream = false;
+		                                 break;
+		                            }
+		                      }
+				}
+                  itter++;
+	if(arg->id==0){
+	//printf("itter %d done\n",itter);
+		
+	}
+            }//itter loop
+
+
+		
+		    cudaMemcpyAsync(arg->h_decoded, arg->d_decoded, arg->N * sizeof(unsigned char)*BATCHSIZE, cudaMemcpyDeviceToHost,arg->stream);
+		
+				cudaStreamSynchronize(arg->stream);
+		    //============================================================================
+		    // Compute Statistics
+		    //============================================================================
+	/*if(arg->id==0){
+		printf("DECODED\n");
+		print_array_char(arg->h_decoded,N*BATCHSIZE);
+		printf("MESSAGE\n");
+		print_array_char(message,N*BATCHSIZE);
+		
+	}*/
+		////maybe move error checking to gpu
+			//#pragma omp parallel for
+			for(int b=0;b<BATCHSIZE;b++){
+		    		err_count = 0;
+			    // Calculate bit errors
+			    for (unsigned k = 0; k < arg->N; k++) {
+			       if (arg->h_decoded[(arg->N*b)+k] != message[(arg->N*b)+k]) { 
+				  err_count++;
+			       }
+			    }
+		
+				pthread_mutex_lock(&lock);
+			    *(arg->bit_error_count) += err_count;
+
+			    // Case Divergence
+			    if (!hasConverged[b]) {
+			       *(arg->NiterMoy) = *(arg->NiterMoy) + 100;
+
+			       *(arg->err_total_count)+=1;
+			    }
+			    // Case Convergence to Right message
+			    else if (err_count == 0) {
+			       *(arg->NiterMax) = max(*(arg->NiterMax), itter);
+			       *(arg->NiterMoy) = *(arg->NiterMoy) + itter;
+			    }
+			   // Case Convergence to Wrong message
+			    else{
+			       *(arg->NiterMax) = max(*(arg->NiterMax), itter);
+			       *(arg->NiterMoy) = *(arg->NiterMoy) + itter;
+			       *(arg->err_total_count)+=1;
+			       *(arg->missed_error_count)+=1;
+			       *(arg->Dmin) = min(*(arg->Dmin), err_count);
+			    }
+				
+				pthread_mutex_unlock(&lock);
+			}
+		
+
+		pthread_mutex_lock(&lock2);
+            	*(arg->nb)+= BATCHSIZE;
+		pthread_mutex_unlock(&lock2);
+         }//frame loop
+	return 0;
 }

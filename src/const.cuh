@@ -7,7 +7,7 @@
 // Project Name:     : OPTIMIZATIONS OF LDPC DECODERS IN CUDA
 // File Name:        : const.cuh
 //                   :
-// Create Date:      : 8 May 2017
+// Create Date:      : 8 May 2017 
 // Modified          : 26 March 2019
 //                   :
 // Description:      : Constants required for the program
@@ -31,8 +31,13 @@
 // Print out everything were doing
 #define VERBOSE
 
-#define NUMSTREAMS 8
+#define NUMSTREAMS 8 
 #define BATCHSIZE 10
+#define NbMonteCarlo 500000 // Maximum number of codewords sent
+
+#define frame_count 100     // Simulation stops when frame_count in error
+
+#define itteration_count 100 // Maximum nb of iterations
 
 #include <cuda.h>
 

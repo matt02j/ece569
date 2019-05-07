@@ -250,7 +250,6 @@ __global__ void ComputeSyndrome(unsigned char * Synd, unsigned char * Decide, un
 
    // intialize ___ regardless of bounds...
    unsigned char synd = 0;
-
    for(int k=threadIdx.x; k<N*BATCHSIZE; k+=blockDim.x){
 	decide[k]=Decide[k];
    }
@@ -260,7 +259,6 @@ __global__ void ComputeSyndrome(unsigned char * Synd, unsigned char * Decide, un
 	   if (id < M) {
 	      
 	      unsigned strides = (num_branches / M);
-
 	      // 
 	      for (int stride = 0; stride < strides; stride++) {
 		 synd ^=decide[d_matrix_flat[id + stride*M]+b*N];
@@ -273,7 +271,7 @@ __global__ void ComputeSyndrome(unsigned char * Synd, unsigned char * Decide, un
 	}
 }
 
-//assumes a single block is running // matg access is coalesced
+//assumes a single block is running // matg access is not coalesced
 
 __global__ void NestedFor(unsigned char* MatG_D, unsigned char* U_D, unsigned k, unsigned N,unsigned M){
 
@@ -288,14 +286,12 @@ __global__ void NestedFor(unsigned char* MatG_D, unsigned char* U_D, unsigned k,
 		for(int i=k+1;i<N;i++){
 			if(id <= k){
 				//  0:k      0:k            0:k     k+1:N    k+1:N
-
 				u[id] = u[id] ^ (MatG_D[id + i*M] * u[i]);
 			}
 		}
 		__syncthreads();
 		for(int i=k; i>0;i--){
 			if(id < i){
-
 				u[id] = u[id] ^ (MatG_D[id + i*M] * u[i]);
 			}
 		}
