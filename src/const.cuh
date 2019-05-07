@@ -33,7 +33,7 @@
 
 #define NUMSTREAMS 8 
 #define BATCHSIZE 10
-#define NbMonteCarlo 500000 // Maximum number of codewords sent
+#define NbMonteCarlo 1000000 // Maximum number of codewords sent
 
 #define frame_count 100     // Simulation stops when frame_count in error
 
