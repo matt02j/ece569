@@ -378,151 +378,6 @@ int main(int argc, char * argv[]) {
 		for(int s=0; s<NUMSTREAMS;s++){
 			pthread_join(threads[s],NULL);
 		}
-		////do stream level parallelization of frame loop using cpu multithread to avoid overhead from divergent frames affecting other streams
-           /* while (nb < NbMonteCarlo && err_total_count < frame_count) {
-
-            //--------------------------------------------Encode--------------------------------------------
-		for(int s=0;s<NUMSTREAMS;s++){
-           	 cudaMemsetAsync(d_bit_stream[s], 0, N * sizeof(unsigned char)*BATCHSIZE,streams[s]);
-
-           	 generate<<< GridDim1,BlockDim1,0,streams[s]>>>(devStates, d_bit_stream[s], rank, N);
-
-            //cudaMemcpy(h_bit_stream, devRandomValues, N * sizeof(unsigned char), cudaMemcpyDeviceToHost);
-
-		    // randomly gerenates a uniform distribution of 0s and 1s
-		    //for (unsigned k = rank; k < N; k++) {
-		   //    h_bit_stream[s][k] = (unsigned char)floor(dist(e2) * 2);
-		    //}
-
-		    //replace that super long loop
-		    //cudaMemcpyAsync(d_bit_stream[s], h_bit_stream[s], N * sizeof(unsigned char), cudaMemcpyHostToDevice,streams[s]);
-		    NestedFor <<<NestedGrid, NestedBlock, N * sizeof(unsigned char),streams[s] >>>(d_MatG, d_bit_stream[s], rank - 1, N,M);
-		   // cudaMemcpyAsync(h_bit_stream[s], d_bit_stream[s], N * sizeof(unsigned char)*BATCHSIZE, cudaMemcpyDeviceToHost,streams[s]); 
-            }
-            for(int s=0;s<NUMSTREAMS;s++){
-                  cudaStreamSynchronize(streams[s]);
-                  
-                  simulateChannel<<<GridDim1, BlockDim1, BLOCK_DIM_1*sizeof(unsigned char)*BATCHSIZE, streams[s]>>>(d_bit_stream[s], d_messageRecieved[s], d_PermG, N,alpha,devStates, d_intermediate[s]);
-		  cudaMemcpyAsync(message[s], d_intermediate[s], N * sizeof(unsigned char)*BATCHSIZE, cudaMemcpyDeviceToHost,streams[s]);
-                  
-                  //for (unsigned k = 0; k < N; k++) {
-                  //      message[s][PermG[k]] = h_bit_stream[s][k];
-                  //}
-            
-                  //---------------------------------------Simulate Channel---------------------------------------
-
-                  // Flip the bits with the alpha percentage (noise over channel)
-			
-		// for(int i=0;i<BATCHSIZE;i++){
-               //   	for (unsigned n = 0; n < N; n++) {
-		//               if (dist(e2) < alpha) {
-		 //                     h_messageRecieved[s][i*N+n] = 1 - message[s][i*N+n];
-		 //               }
-		 //               else {
-		//                      h_messageRecieved[s][i*N+n] = message[s][i*N+n];
-		 //               }
-		//	}
-                 // }
-            
-                  //-----------------------------------------------Decode-----------------------------------------------
-
-                 //cudaMemcpyAsync(d_messageRecieved[s], h_messageRecieved[s], N * sizeof(unsigned char)*BATCHSIZE, cudaMemcpyHostToDevice,streams[s]);
-            } 
-            unsigned itter = 0;
-		unsigned it[NUMSTREAMS]={0};
-            bool hasConverged[NUMSTREAMS][BATCHSIZE] = {{false}};
-		bool hasConvergedStream[NUMSTREAMS]={false};
-            while (itter < itteration_count) {
-                  for(int s=0;s<NUMSTREAMS;s++){
-                        if(!hasConvergedStream[s]){
-                              // Different itterations have different kernels
-                              if (itter == 0) {
-                                    DataPassGB_0<<<GridDim1,BlockDim1,0,streams[s]>>> (d_VtoC[s], d_messageRecieved[s], d_interleaver, N, num_branches);
-                              }
-                              else if (itter < 15) {
-                                    DataPassGB_1<<<GridDim1,BlockDim1,num_branches*sizeof(unsigned char)+num_branches*sizeof(unsigned),streams[s]>>>
-                                                (d_VtoC[s],d_CtoV[s],d_messageRecieved[s],d_interleaver,N,num_branches);
-                              }
-                              else {
-           	 			generate2<<<GridDim1, BlockDim1,0,streams[s]>>>(devStates, d_varr[s], N);
-                                    DataPassGB_2<<<GridDim1,BlockDim1,0,streams[s]>>>(d_VtoC[s], d_CtoV[s], d_messageRecieved[s], d_interleaver, N, num_branches, d_varr[s]);
-                              }
-                              CheckPassGB<<<GridDim2,BlockDim2,num_branches * sizeof(unsigned char),streams[s]>>>(d_CtoV[s], d_VtoC[s], M, num_branches);
-
-                              APP_GB<<<GridDim1,BlockDim1,0,streams[s]>>>(d_decoded[s],d_CtoV[s], d_messageRecieved[s], d_interleaver, N, num_branches);
-                              
-                              ComputeSyndrome<<<GridDim2, BlockDim2, N * sizeof(unsigned char)*BATCHSIZE,streams[s]>>>(d_synd[s], d_decoded[s], M, num_branches, N);
-                              cudaMemcpyAsync(h_synd[s], d_synd[s], M * sizeof(unsigned char)*BATCHSIZE, cudaMemcpyDeviceToHost,streams[s]);
-                        }
-                  }    
-                  for(int s=0;s<NUMSTREAMS;s++){
-			
-                        if(!hasConvergedStream[s]){
-                              // check for convergence
-                              cudaStreamSynchronize(streams[s]);
-				hasConvergedStream[s]=true;
-				for(int b=0;b<BATCHSIZE;b++){
-		                      hasConverged[s][b] = true;
-				////if we do a reduction on d_synd we can get rid of this loop
-		                      for (unsigned kk = 0; kk < M; kk++) {
-		                            if (h_synd[s][kk+M*b] == 1) {
-		                                  hasConverged[s][b] = false;
-						hasConvergedStream[s]=false;
-		                            break;
-		                            }
-		                      }
-				}
-                              it[s]++;
-                        }
-                  }
-                  itter++;
-            }//itter loop
-
-
-		for(int s=0;s<NUMSTREAMS;s++){
-		    cudaMemcpyAsync(h_decoded[s], d_decoded[s], N * sizeof(unsigned char)*BATCHSIZE, cudaMemcpyDeviceToHost,streams[s]);
-		}
-		    //============================================================================
-		    // Compute Statistics
-		    //============================================================================
-		    frames_tested+=(NUMSTREAMS*BATCHSIZE);
-		////maybe move error checking to gpu
-		for(int s=0;s<NUMSTREAMS;s++){
-			cudaStreamSynchronize(streams[s]);
-			//#pragma omp parallel for
-			for(int b=0;b<BATCHSIZE;b++){
-		    		err_count = 0;
-			    // Calculate bit errors
-			    for (unsigned k = 0; k < N; k++) {
-			       if (h_decoded[s][(N*b)+k] != message[s][(N*b)+k]) { 
-				  err_count++;
-			       }
-			    }
-			    bit_error_count += err_count;
-
-			    // Case Divergence
-			    if (!hasConverged[s][b]) {
-			       NiterMoy = NiterMoy + itteration_count;
-			       err_total_count++;
-			    }
-			    // Case Convergence to Right message
-			    else if (err_count == 0) {
-			       NiterMax = max(NiterMax, it[s] + 1);
-			       NiterMoy = NiterMoy + (it[s] + 1);
-			    }
-			   // Case Convergence to Wrong message
-			    else{
-			       NiterMax = max(NiterMax, it[s] + 1);
-			       NiterMoy = NiterMoy + (it[s] + 1);
-			       err_total_count++;
-			       missed_error_count++;
-			       Dmin = min(Dmin, err_count);
-			    }
-			}
-		}
-
-            nb+= NUMSTREAMS * BATCHSIZE;
-         }//frame loop*/
 
 #ifdef PROFILE  
          gettimeofday(&stop, NULL);
@@ -582,10 +437,10 @@ myargs *arg = (myargs*)args;
       dim3 BlockDim2(BLOCK_DIM_2);
       dim3 NestedBlock(1024);
       dim3 NestedGrid(BATCHSIZE);
-unsigned err_count=0;
-unsigned itter=0;
-unsigned char *message = (unsigned char*) malloc(arg->N*BATCHSIZE);
-
+	unsigned err_count=0;
+	unsigned itter=0;
+	unsigned char *message = (unsigned char*) malloc(arg->N*BATCHSIZE);
+	unsigned batchitter[BATCHSIZE];
 	while( *(arg->nb) < NbMonteCarlo && *(arg->err_total_count) < frame_count ){
 
             //--------------------------------------------Encode--------------------------------------------
@@ -598,7 +453,7 @@ unsigned char *message = (unsigned char*) malloc(arg->N*BATCHSIZE);
 
 		 cudaMemcpyAsync(arg->h_messageRecieved, arg->d_bit_stream, arg->N * sizeof(unsigned char)*BATCHSIZE, cudaMemcpyDeviceToHost,arg->stream);
 
-                 simulateChannel<<<GridDim1, BlockDim1, BLOCK_DIM_1*sizeof(unsigned char)*BATCHSIZE, arg->stream>>>(arg->d_bit_stream, arg->d_messageRecieved, arg->d_PermG, arg->N,arg->alpha,arg->devStates, arg->d_intermediate);
+                 simulateChannel<<<GridDim1, BlockDim1, 0, arg->stream>>>(arg->d_bit_stream, arg->d_messageRecieved, arg->d_PermG, arg->N,arg->alpha,arg->devStates, arg->d_intermediate);
 		 cudaMemcpyAsync(message, arg->d_intermediate, arg->N * sizeof(unsigned char)*BATCHSIZE, cudaMemcpyDeviceToHost,arg->stream);
 
             	itter = 0;
@@ -606,14 +461,9 @@ unsigned char *message = (unsigned char*) malloc(arg->N*BATCHSIZE);
             	bool hasConverged[BATCHSIZE] = {false};
 
 		bool hasConvergedStream=false;
-
-	
-
-	
+		memset(batchitter,0,sizeof(unsigned)*BATCHSIZE);
 
             while(itter < itteration_count && !hasConvergedStream){
-
-                       
 
                               // Different itterations have different kernels
 
@@ -655,29 +505,35 @@ unsigned char *message = (unsigned char*) malloc(arg->N*BATCHSIZE);
 		                      }
 				}
                   itter++;
-	if(arg->id==0){
-	//printf("itter %d done\n",itter);
-		
-	}
+				
+				for(int b=0;b<BATCHSIZE ;b++){
+					if(hasConverged[b] && batchitter[b]==0){
+						batchitter[b]=itter;
+					}
+				}
             }//itter loop
 
-
-		
+		if(!hasConvergedStream){
+			for(int b=0;b<BATCHSIZE;b++){
+		                      hasConverged[b] = true;
+				////if we do a reduction on d_synd we can get rid of this loop
+		                      for (unsigned kk = 0; kk < arg->M; kk++) {
+		                            if (arg->h_synd[kk+arg->M*b] == 1) {
+		                                  hasConverged[b] = false;
+						  hasConvergedStream = false;
+		                                 break;
+		                            }
+		                      }
+			}
+		}
 		    cudaMemcpyAsync(arg->h_decoded, arg->d_decoded, arg->N * sizeof(unsigned char)*BATCHSIZE, cudaMemcpyDeviceToHost,arg->stream);
 		
 				cudaStreamSynchronize(arg->stream);
 		    //============================================================================
 		    // Compute Statistics
 		    //============================================================================
-	/*if(arg->id==0){
-		printf("DECODED\n");
-		print_array_char(arg->h_decoded,N*BATCHSIZE);
-		printf("MESSAGE\n");
-		print_array_char(message,N*BATCHSIZE);
-		
-	}*/
+
 		////maybe move error checking to gpu
-			//#pragma omp parallel for
 			for(int b=0;b<BATCHSIZE;b++){
 		    		err_count = 0;
 			    // Calculate bit errors
@@ -698,13 +554,13 @@ unsigned char *message = (unsigned char*) malloc(arg->N*BATCHSIZE);
 			    }
 			    // Case Convergence to Right message
 			    else if (err_count == 0) {
-			       *(arg->NiterMax) = max(*(arg->NiterMax), itter);
-			       *(arg->NiterMoy) = *(arg->NiterMoy) + itter;
+			       *(arg->NiterMax) = max(*(arg->NiterMax), batchitter[b]);
+			       *(arg->NiterMoy) = *(arg->NiterMoy) + batchitter[b];
 			    }
 			   // Case Convergence to Wrong message
 			    else{
-			       *(arg->NiterMax) = max(*(arg->NiterMax), itter);
-			       *(arg->NiterMoy) = *(arg->NiterMoy) + itter;
+			       *(arg->NiterMax) = max(*(arg->NiterMax), batchitter[b]);
+			       *(arg->NiterMoy) = *(arg->NiterMoy) + batchitter[b];
 			       *(arg->err_total_count)+=1;
 			       *(arg->missed_error_count)+=1;
 			       *(arg->Dmin) = min(*(arg->Dmin), err_count);

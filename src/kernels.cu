@@ -375,8 +375,7 @@ __global__ void generate2( curandState* globalState, unsigned char* randomArray,
    if(idx < N){
       curandState localState = globalState[idx];
       float RANDOM = curand_uniform(&localState);
-      RANDOM *= 1.999999; //https://stackoverflow.com/questions/18501081/generating-random-number-within-cuda-kernel-in-a-varying-range
-      unsigned char random = RANDOM < 0.4; //20% chance of a 1
+      unsigned char random = RANDOM < 0.19; //20% chance of a 1
       randomArray[idx] = random;
 	
       globalState[idx] = localState;
